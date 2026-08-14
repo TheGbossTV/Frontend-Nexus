@@ -11,6 +11,8 @@ import remarkFrontmatter from "remark-frontmatter";
 import remarkMdxFrontmatter from "remark-mdx-frontmatter";
 // @ts-expect-error -- local plugin, plain JS with no type declarations
 import remarkDifficultyFlag from "./plugins/remark-difficulty-flag.mjs";
+// @ts-expect-error -- local plugin, plain JS with no type declarations
+import searchIndex from "./plugins/vite-search-index.mjs";
 import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { BASE_PATH } from "./site.config";
@@ -60,5 +62,6 @@ export default defineConfig({
     // no @vitejs/plugin-react here, it would double-transform every component.
     reactRouter(),
     tsconfigPaths(),
+    searchIndex({ base: BASE_PATH }),
   ],
 });

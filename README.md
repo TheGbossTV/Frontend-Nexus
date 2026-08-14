@@ -60,9 +60,10 @@ react-router.config.ts         ssr:false, basename, the prerender URL list,
                                and the Pages buildEnd hook
 vite.config.ts                 Vite base + plugin order (MDX must be "pre")
 scripts/preview-pages.mjs      Static server that mimics GitHub Pages
-plugins/                       Local remark plugin: flags entries that use
-                               <DifficultyTabs>, so the TOC never emits a
-                               jump link to an anchor that doesn't exist
+plugins/
+  remark-difficulty-flag.mjs   Flags entries using <DifficultyTabs>, so the
+                               TOC never emits a jump link to a missing anchor
+  vite-search-index.mjs        Emits search-index.json at build time
 
 app/
   root.tsx                     <html> shell, no-flash theme script, error boundary
@@ -76,11 +77,13 @@ app/
     CodeBlock.tsx              IDE-window chrome + copy-to-clipboard island
     DifficultyTabs.tsx         easy/medium/advanced tabs, synced to ?level=
     TableOfContents.tsx        Sticky in-page TOC, built at build time
+    Search.tsx                 Ctrl/Cmd+K search dialog
     mdx.tsx                    Components + element overrides for MDX bodies
   lib/
     frontmatter.ts             The content schema + its validator
     content.ts                 Typed content loader (the only content API)
     preferences.ts             localStorage keys + the pre-paint boot script
+    search.ts                  Lazy Fuse + index loader, FUSE_OPTIONS
   content/
     libraries/*.mdx            The entries themselves
 ```
@@ -103,6 +106,26 @@ copy button is interactive; the block itself stays static HTML.
 
 To highlight a new language, just use its name in the fence — Shiki loads
 grammars at build time, so nothing needs registering.
+
+## Search
+
+`Ctrl`/`Cmd` + `K`, or the button in the header. Fuzzy search over title, tags,
+category, and TL;DR, with arrow-key navigation and client-side routing on
+select — no page reload.
+
+[`plugins/vite-search-index.mjs`](plugins/vite-search-index.mjs) emits
+`search-index.json` at build time and serves the identical JSON from memory in
+dev, so both environments hit the same URL (rebuilt per request in dev, so
+editing an entry shows up without a restart).
+
+Both the index **and Fuse.js itself** are fetched on first open — the 27 KB Fuse
+chunk is not preloaded, so a reader who never searches pays nothing for it. The
+index holds metadata only, never body text, which is what keeps it small enough
+to justify fetching on demand.
+
+The Fuse options live in [`app/lib/search.ts`](app/lib/search.ts) as an exported
+`FUSE_OPTIONS` so retrieval can be exercised directly rather than only through
+the UI.
 
 ## Persisted UI state
 
@@ -230,7 +253,7 @@ Built in phases; each one is verified before the next starts.
 - [x] **Phase 2** — Sidebar (grouped, collapsible, persisted)
 - [x] **Phase 3** — Shiki syntax highlighting + IDE-window code blocks
 - [x] **Phase 4** — `<DifficultyTabs>` + sticky in-page TOC
-- [ ] **Phase 5** — Client-side search over a build-time index
+- [x] **Phase 5** — Client-side search over a build-time index
 - [ ] **Phase 6** — Content generation pass
 
 Deferred on purpose: SEO/meta/sitemap, auth, comments, custom domain.
