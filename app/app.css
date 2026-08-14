@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+/*
+ * Tailwind v4 is CSS-first: there is no tailwind.config.js and no `darkMode`
+ * key. Class-strategy dark mode is declared here instead. `dark:` in markup
+ * works exactly as it always has.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Semantic tokens — swap values per theme, never per component. */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-edge: var(--edge);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+}
+
+:root {
+  --canvas: #f8fafc;
+  --surface: #ffffff;
+  --edge: #e2e8f0;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --accent: #4f46e5;
+  --accent-ink: #ffffff;
+}
+
+.dark {
+  --canvas: #0b0f17;
+  --surface: #131926;
+  --edge: #1f2937;
+  --ink: #e5e7eb;
+  --muted: #94a3b8;
+  --accent: #818cf8;
+  --accent-ink: #0b0f17;
+}
+
+html {
+  color-scheme: light;
+  scroll-behavior: smooth;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+/*
+ * Prose defaults for MDX bodies. Phase 3 replaces the `pre` styling with a
+ * proper Shiki-highlighted IDE-window CodeBlock component.
+ */
+.prose-entry :where(h2) {
+  @apply mt-10 mb-3 text-2xl font-semibold tracking-tight text-ink;
+}
+
+.prose-entry :where(h3) {
+  @apply mt-8 mb-2 text-lg font-semibold tracking-tight text-ink;
+}
+
+.prose-entry :where(p) {
+  @apply my-4 leading-7 text-muted;
+}
+
+.prose-entry :where(ul) {
+  @apply my-4 list-disc space-y-2 pl-6 text-muted;
+}
+
+.prose-entry :where(ol) {
+  @apply my-4 list-decimal space-y-2 pl-6 text-muted;
+}
+
+.prose-entry :where(a) {
+  @apply text-accent underline underline-offset-4;
+}
+
+.prose-entry :where(strong) {
+  @apply font-semibold text-ink;
+}
+
+.prose-entry :where(code) {
+  @apply rounded bg-canvas px-1.5 py-0.5 font-mono text-[0.85em] text-ink;
+}
+
+.prose-entry :where(pre) {
+  @apply my-6 overflow-x-auto rounded-xl border border-edge bg-canvas p-4 text-sm leading-6;
+}
+
+.prose-entry :where(pre code) {
+  @apply bg-transparent p-0 text-[0.9em];
+}

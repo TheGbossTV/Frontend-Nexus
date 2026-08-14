@@ -1,0 +1,53 @@
+/**
+ * Deliberately stateless: which icon shows is decided by CSS (`dark:`), not by
+ * React. That means the prerendered markup is correct for both themes and
+ * there is nothing to hydrate-mismatch.
+ */
+export function ThemeToggle() {
+  function toggleTheme() {
+    const isDark = document.documentElement.classList.toggle("dark");
+    try {
+      localStorage.setItem("theme", isDark ? "dark" : "light");
+    } catch {
+      // Private mode / storage disabled — the toggle still works for this page.
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={toggleTheme}
+      aria-label="Toggle light and dark theme"
+      title="Toggle theme"
+      className="rounded-lg border border-edge bg-surface p-2 text-muted transition hover:text-ink"
+    >
+      {/* Sun — shown in dark mode, i.e. "switch to light" */}
+      <svg
+        className="hidden size-5 dark:block"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        aria-hidden="true"
+      >
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+      </svg>
+
+      {/* Moon — shown in light mode, i.e. "switch to dark" */}
+      <svg
+        className="size-5 dark:hidden"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
+      </svg>
+    </button>
+  );
+}

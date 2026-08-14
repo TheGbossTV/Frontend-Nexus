@@ -1,0 +1,116 @@
+---
+title: Zustand
+category: state-management
+tags:
+  - state
+  - react
+  - store
+  - hooks
+tldr: >-
+  A tiny hook-based store for React. You create a store with `create`, read from
+  it with a selector, and update it with `set` — no providers, no reducers, no
+  boilerplate.
+whenToUse: >-
+  When you need shared client state across components that aren't neatly related
+  in the tree, and Context is causing re-render pain or prop drilling. Ideal for
+  UI state, session state, and small-to-medium app state where you want
+  something you can read in an afternoon.
+whenNotTo: >-
+  When the state you're reaching for is actually server state — cached API data
+  with loading, refetching, and invalidation. Use a data-fetching library for
+  that. Also skip it when the state genuinely belongs to one component (plain
+  `useState`) or when your team needs the strict auditability and time-travel
+  tooling of a formal action/reducer architecture.
+alternatives:
+  - slug: redux-toolkit
+    reason: >-
+      Choose it when you want an enforced, auditable action/reducer flow and
+      first-class DevTools time-travel across a large team. It costs more
+      boilerplate than Zustand, and that structure is precisely the point on big
+      codebases where implicit mutation from anywhere becomes a liability.
+  - slug: jotai
+    reason: >-
+      Choose it when your state decomposes naturally into many small independent
+      pieces. Jotai is atom-first and bottom-up, so components subscribe to
+      exactly one atom; Zustand is store-first, so you get one object and use
+      selectors to narrow what re-renders.
+  - slug: react-context
+    reason: >-
+      Already built in, so choose it for values that are set once and rarely
+      change — theme, locale, the current user. It has no selector mechanism, so
+      every consumer re-renders on any change, which is the exact problem
+      Zustand is usually brought in to solve.
+docsUrl: https://zustand.docs.pmnd.rs/
+popularity: high
+status: published
+verified: false
+lastReviewed: "2026-08-14"
+---
+
+## Introduction
+
+Zustand (German for "state") is a state management library from the pmnd.rs
+team. Current major version: **v5**.
+
+The whole idea is that a store *is* a hook. You call `create` with a function
+that receives `set`, and you get back a hook you can call from any component —
+no `<Provider>` wrapper, no context, no reducers or action-type constants.
+
+```js
+import { create } from 'zustand'
+
+const useCounterStore = create((set) => ({
+  count: 0,
+  increment: () => set((state) => ({ count: state.count + 1 })),
+  reset: () => set({ count: 0 }),
+}))
+```
+
+Consuming it is a hook call. The argument is a **selector** — the function that
+decides what this component actually cares about:
+
+```jsx
+function Counter() {
+  const count = useCounterStore((state) => state.count)
+  const increment = useCounterStore((state) => state.increment)
+
+  return <button onClick={increment}>Clicked {count} times</button>
+}
+```
+
+That selector is the important part. A component that selects only `count`
+re-renders only when `count` changes — not when some unrelated slice of the
+store updates. This is the main practical difference from putting the same
+object into React Context, where every consumer re-renders on every change.
+
+Note that `set` **merges** at the top level rather than replacing, so returning
+a partial object is normal and you don't need to spread the rest of the state.
+
+## Things worth knowing early
+
+State lives outside React, so you can read and write it from anywhere — event
+handlers, plain functions, other libraries — using the store's static methods:
+
+```js
+useCounterStore.getState().count
+useCounterStore.setState({ count: 10 })
+```
+
+When you need more than one value at once, selecting an object literal creates a
+new reference on every render, which defeats the re-render check. Use
+`useShallow` to compare the selected fields instead of the object identity:
+
+```js
+import { useShallow } from 'zustand/react/shallow'
+
+const { count, reset } = useCounterStore(
+  useShallow((state) => ({ count: state.count, reset: state.reset })),
+)
+```
+
+Everything else — persistence to `localStorage`, Redux DevTools, Immer-style
+mutable updates — is opt-in middleware from `zustand/middleware` that wraps the
+same store function.
+
+*Worked examples across easy, medium, and advanced levels are coming to this
+entry in a later pass.*
