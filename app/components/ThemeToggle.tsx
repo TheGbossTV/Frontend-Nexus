@@ -3,11 +3,13 @@
  * React. That means the prerendered markup is correct for both themes and
  * there is nothing to hydrate-mismatch.
  */
+import { STORAGE_KEYS } from "~/lib/preferences";
+
 export function ThemeToggle() {
   function toggleTheme() {
     const isDark = document.documentElement.classList.toggle("dark");
     try {
-      localStorage.setItem("theme", isDark ? "dark" : "light");
+      localStorage.setItem(STORAGE_KEYS.theme, isDark ? "dark" : "light");
     } catch {
       // Private mode / storage disabled — the toggle still works for this page.
     }

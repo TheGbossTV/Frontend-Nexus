@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import { SITE_NAME, SITE_TAGLINE } from "../../site.config";
-import { getAllCategories, getAllLibraries } from "../lib/content";
+import { getAllCategories, getAllLibraries } from "~/lib/content";
 
 export function meta() {
   return [

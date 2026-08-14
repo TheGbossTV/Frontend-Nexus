@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import type { Library } from "../lib/content";
+import type { Library } from "~/lib/content";
 
 export function DraftBadge() {
   return (

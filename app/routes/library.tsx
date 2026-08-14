@@ -1,8 +1,8 @@
 import { Link } from "react-router";
 import type { Route } from "./+types/library";
 import { SITE_NAME } from "../../site.config";
-import { DraftBadge } from "../components/EntryCard";
-import { getLibraryBySlug, toTitleCase } from "../lib/content";
+import { DraftBadge } from "~/components/EntryCard";
+import { getLibraryBySlug, toTitleCase } from "~/lib/content";
 
 export function meta({ params }: Route.MetaArgs) {
   const entry = getLibraryBySlug(params.slug);

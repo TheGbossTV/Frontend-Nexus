@@ -9,29 +9,15 @@ import {
 } from "react-router";
 import type { Route } from "./+types/root";
 import "./app.css";
-import { Header } from "./components/Header";
+import { Header } from "~/components/Header";
+import { Sidebar } from "~/components/Sidebar";
+import { bootScript } from "~/lib/preferences";
 import { SITE_NAME, SITE_TAGLINE } from "../site.config";
 
 export const meta: Route.MetaFunction = () => [
   { title: SITE_NAME },
   { name: "description", content: SITE_TAGLINE },
 ];
-
-/*
- * Runs before first paint, so a light-mode user never sees a dark flash.
- * The prerendered HTML ships with class="dark" (dark is the default); this
- * only ever *removes* it. Kept as a raw string because it must be inline and
- * synchronous — a module script would run too late.
- */
-const noFlashThemeScript = `
-(function () {
-  try {
-    if (localStorage.getItem("theme") === "light") {
-      document.documentElement.classList.remove("dark");
-    }
-  } catch (e) {}
-})();
-`;
 
 export function Layout({ children }: { children: ReactNode }) {
   return (
@@ -41,11 +27,15 @@ export function Layout({ children }: { children: ReactNode }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
         <Links />
-        <script dangerouslySetInnerHTML={{ __html: noFlashThemeScript }} />
+        {/* Must be inline and synchronous — a module script would run after paint. */}
+        <script dangerouslySetInnerHTML={{ __html: bootScript }} />
       </head>
       <body className="min-h-screen bg-canvas text-ink antialiased">
         <Header />
-        <main className="mx-auto w-full max-w-5xl px-6 py-10">{children}</main>
+        <div className="mx-auto flex w-full max-w-7xl gap-10 px-6">
+          <Sidebar />
+          <main className="min-w-0 flex-1 py-10">{children}</main>
+        </div>
         <ScrollRestoration />
         <Scripts />
       </body>

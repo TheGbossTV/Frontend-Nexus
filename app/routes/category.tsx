@@ -1,8 +1,8 @@
 import { Link } from "react-router";
 import type { Route } from "./+types/category";
 import { SITE_NAME } from "../../site.config";
-import { EntryCard } from "../components/EntryCard";
-import { getLibrariesByCategory, toTitleCase } from "../lib/content";
+import { EntryCard } from "~/components/EntryCard";
+import { getLibrariesByCategory, toTitleCase } from "~/lib/content";
 
 export function meta({ params }: Route.MetaArgs) {
   return [{ title: `${toTitleCase(params.slug)} — ${SITE_NAME}` }];

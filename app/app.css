@@ -48,6 +48,44 @@ html.dark {
 }
 
 /*
+ * Sidebar visibility.
+ *
+ * Three states, in priority order: an explicit user choice (`data-sidebar` on
+ * <html>, set by the boot script or the toggle) always wins; otherwise the
+ * breakpoint decides — collapsed on mobile, open on desktop. Driving this from
+ * CSS rather than React state is what lets the boot script restore the choice
+ * before first paint without any hydration bookkeeping.
+ */
+[data-sidebar-panel] {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  [data-sidebar-panel] {
+    display: block;
+  }
+}
+
+html[data-sidebar="open"] [data-sidebar-panel] {
+  display: block;
+}
+
+html[data-sidebar="hidden"] [data-sidebar-panel] {
+  display: none;
+}
+
+/* The backdrop only exists while the panel is overlaying content on mobile. */
+[data-sidebar-backdrop] {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  html[data-sidebar="open"] [data-sidebar-backdrop] {
+    display: block;
+  }
+}
+
+/*
  * Prose defaults for MDX bodies. Phase 3 replaces the `pre` styling with a
  * proper Shiki-highlighted IDE-window CodeBlock component.
  */

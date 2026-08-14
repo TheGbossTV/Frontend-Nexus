@@ -54,13 +54,32 @@ app/
     home.tsx                   /                    category grid
     category.tsx               /category/:slug      entries in one category
     library.tsx                /library/:slug       a single entry
-  components/                  Header, ThemeToggle, EntryCard
+  components/                  Header, Sidebar, ThemeToggle, EntryCard
   lib/
     frontmatter.ts             The content schema + its validator
     content.ts                 Typed content loader (the only content API)
+    preferences.ts             localStorage keys + the pre-paint boot script
   content/
     libraries/*.mdx            The entries themselves
 ```
+
+## Persisted UI state
+
+Theme, sidebar visibility, and which category groups are collapsed all live in
+`localStorage`. Because pages are prerendered, the shipped HTML is always the
+*default* state — reading storage during render would desync from it and trip
+hydration.
+
+So [`app/lib/preferences.ts`](app/lib/preferences.ts) exports a `bootScript`
+that root.tsx inlines into `<head>`. It applies the persisted state before first
+paint (no flash), React catches up in an effect, and collapsed groups are hidden
+via a stylesheet scoped to `html:not([data-hydrated])` that retires itself the
+moment the sidebar mounts.
+
+Sidebar visibility has three states: an explicit choice on `<html data-sidebar>`
+always wins, otherwise the breakpoint decides — collapsed on mobile (as an
+overlay), open on desktop. A stored `open` is deliberately *not* restored on
+mobile, so a small screen never loads with the overlay covering the page.
 
 ## Changing the deploy path
 
@@ -124,7 +143,7 @@ not-yet-prerendered routes still boot the app).
 Built in phases; each one is verified before the next starts.
 
 - [x] **Phase 1** — Scaffold, routing, content pipeline, deploy
-- [ ] **Phase 2** — Sidebar (grouped, collapsible, persisted)
+- [x] **Phase 2** — Sidebar (grouped, collapsible, persisted)
 - [ ] **Phase 3** — Shiki syntax highlighting + IDE-window code blocks
 - [ ] **Phase 4** — `<DifficultyTabs>` + sticky in-page TOC
 - [ ] **Phase 5** — Client-side search over a build-time index
