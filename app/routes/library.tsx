@@ -3,6 +3,7 @@ import type { Route } from "./+types/library";
 import { SITE_NAME } from "../../site.config";
 import { DraftBadge } from "~/components/EntryCard";
 import { mdxComponents } from "~/components/mdx";
+import { TableOfContents } from "~/components/TableOfContents";
 import { getLibraryBySlug, toTitleCase } from "~/lib/content";
 
 export function meta({ params }: Route.MetaArgs) {
@@ -40,100 +41,113 @@ export default function LibraryPage({ params }: Route.ComponentProps) {
   const { Content, frontmatter } = entry;
 
   return (
-    <article>
-      {/* 1. Title + TL;DR, with the official docs link kept high on the page. */}
-      <header className="border-b border-edge pb-8">
-        <Link
-          to={`/category/${frontmatter.category}`}
-          className="text-sm text-muted hover:text-ink"
-        >
-          ← {toTitleCase(frontmatter.category)}
-        </Link>
+    <div className="flex gap-10">
+      <article className="min-w-0 flex-1">
+        {/* 1. Title + TL;DR, with the official docs link kept high on the page. */}
+        <header className="border-b border-edge pb-8">
+          <Link
+            to={`/category/${frontmatter.category}`}
+            className="text-sm text-muted hover:text-ink"
+          >
+            ← {toTitleCase(frontmatter.category)}
+          </Link>
 
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <h1 className="text-4xl font-semibold tracking-tight">
-            {frontmatter.title}
-          </h1>
-          {frontmatter.status === "draft" && <DraftBadge />}
-        </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <h1 className="text-4xl font-semibold tracking-tight">
+              {frontmatter.title}
+            </h1>
+            {frontmatter.status === "draft" && <DraftBadge />}
+          </div>
 
-        <p className="mt-4 max-w-2xl text-lg leading-8 text-muted">
-          {frontmatter.tldr}
-        </p>
+          <p className="mt-4 max-w-2xl text-lg leading-8 text-muted">
+            {frontmatter.tldr}
+          </p>
 
-        <a
-          href={frontmatter.docsUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-6 inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-ink transition hover:opacity-90"
-        >
-          Official documentation
-          <span aria-hidden="true">↗</span>
-        </a>
-      </header>
+          <a
+            href={frontmatter.docsUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-ink transition hover:opacity-90"
+          >
+            Official documentation
+            <span aria-hidden="true">↗</span>
+          </a>
+        </header>
 
-      {/* 2. Introduction and any additional prose, straight from the MDX body. */}
-      <div className="prose-entry">
-        <Content components={mdxComponents} />
-      </div>
-
-      {/* 3. When to use / when not to. */}
-      <section className="mt-10 grid gap-4 sm:grid-cols-2">
-        <div className="rounded-xl border border-edge bg-surface p-5">
-          <h2 className="text-sm font-semibold tracking-wide uppercase">
-            When to use it
-          </h2>
-          <p className="mt-3 leading-7 text-muted">{frontmatter.whenToUse}</p>
-        </div>
-        <div className="rounded-xl border border-edge bg-surface p-5">
-          <h2 className="text-sm font-semibold tracking-wide uppercase">
-            When <em>not</em> to
-          </h2>
-          <p className="mt-3 leading-7 text-muted">{frontmatter.whenNotTo}</p>
-        </div>
-      </section>
-
-      {/* 4. Alternatives — linked when the alternative has its own entry. */}
-      {frontmatter.alternatives.length > 0 && (
-        <section className="mt-10">
-          <h2 className="text-2xl font-semibold tracking-tight">
-            Alternatives
-          </h2>
-          <ul className="mt-4 space-y-3">
-            {frontmatter.alternatives.map((alternative) => {
-              const target = getLibraryBySlug(alternative.slug);
-              return (
-                <li
-                  key={alternative.slug}
-                  className="rounded-xl border border-edge bg-surface p-5"
-                >
-                  <h3 className="font-semibold tracking-tight">
-                    {target ? (
-                      <Link
-                        to={`/library/${alternative.slug}`}
-                        className="text-accent underline underline-offset-4"
-                      >
-                        {target.frontmatter.title}
-                      </Link>
-                    ) : (
-                      toTitleCase(alternative.slug)
-                    )}
-                  </h3>
-                  <p className="mt-2 leading-7 text-muted">
-                    {alternative.reason}
-                  </p>
-                </li>
-              );
-            })}
-          </ul>
+        {/* 3. When to use / when not to. Frontmatter-driven, kept above the
+            long-form body so the practical guidance isn't buried under code. */}
+        <section className="mt-10 grid gap-4 sm:grid-cols-2">
+          <div className="rounded-xl border border-edge bg-surface p-5">
+            <h2 className="text-sm font-semibold tracking-wide uppercase">
+              When to use it
+            </h2>
+            <p className="mt-3 leading-7 text-muted">{frontmatter.whenToUse}</p>
+          </div>
+          <div className="rounded-xl border border-edge bg-surface p-5">
+            <h2 className="text-sm font-semibold tracking-wide uppercase">
+              When <em>not</em> to
+            </h2>
+            <p className="mt-3 leading-7 text-muted">{frontmatter.whenNotTo}</p>
+          </div>
         </section>
-      )}
 
-      <footer className="mt-12 flex flex-wrap gap-x-6 gap-y-1 border-t border-edge pt-6 text-sm text-muted">
-        <span>Popularity: {frontmatter.popularity}</span>
-        <span>Last reviewed: {frontmatter.lastReviewed}</span>
-        {!frontmatter.verified && <span>Not yet human-verified</span>}
-      </footer>
-    </article>
+        {/* 4. Alternatives — linked when the alternative has its own entry. */}
+        {frontmatter.alternatives.length > 0 && (
+          <section className="mt-10">
+            <h2 className="text-2xl font-semibold tracking-tight">
+              Alternatives
+            </h2>
+            <ul className="mt-4 space-y-3">
+              {frontmatter.alternatives.map((alternative) => {
+                const target = getLibraryBySlug(alternative.slug);
+                return (
+                  <li
+                    key={alternative.slug}
+                    className="rounded-xl border border-edge bg-surface p-5"
+                  >
+                    <h3 className="font-semibold tracking-tight">
+                      {target ? (
+                        <Link
+                          to={`/library/${alternative.slug}`}
+                          className="text-accent underline underline-offset-4"
+                        >
+                          {target.frontmatter.title}
+                        </Link>
+                      ) : (
+                        toTitleCase(alternative.slug)
+                      )}
+                    </h3>
+                    <p className="mt-2 leading-7 text-muted">
+                      {alternative.reason}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
+        {/* 2 + 6. The MDX body: introduction, then <DifficultyTabs>. These are
+            one unit because a compiled MDX body renders as a single component —
+            see the note in README.md about page order. */}
+        <div className="prose-entry">
+          <Content components={mdxComponents} />
+        </div>
+
+        <footer className="mt-12 flex flex-wrap gap-x-6 gap-y-1 border-t border-edge pt-6 text-sm text-muted">
+          <span>Popularity: {frontmatter.popularity}</span>
+          <span>Last reviewed: {frontmatter.lastReviewed}</span>
+          {!frontmatter.verified && <span>Not yet human-verified</span>}
+        </footer>
+      </article>
+
+      {/* 7. Sticky in-page TOC. Needs a wide screen to earn its keep. */}
+      <div className="hidden w-52 shrink-0 py-10 xl:block">
+        <TableOfContents
+          toc={entry.toc}
+          hasDifficultyTabs={entry.hasDifficultyTabs}
+        />
+      </div>
+    </div>
   );
 }

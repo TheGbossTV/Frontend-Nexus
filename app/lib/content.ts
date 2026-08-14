@@ -1,3 +1,4 @@
+import type { TocEntry } from "@stefanprobst/rehype-extract-toc";
 import type { ComponentType } from "react";
 import { type LibraryFrontmatter, parseFrontmatter } from "./frontmatter";
 
@@ -7,6 +8,10 @@ export interface Library {
   frontmatter: LibraryFrontmatter;
   /** The compiled MDX body. Render as <entry.Content />. */
   Content: ComponentType<Record<string, unknown>>;
+  /** Headings extracted at build time by rehype-extract-toc. */
+  toc: TocEntry[];
+  /** Whether the body uses <DifficultyTabs>, detected at build time. */
+  hasDifficultyTabs: boolean;
 }
 
 export interface Category {
@@ -20,6 +25,10 @@ interface MdxModule {
   default: ComponentType<Record<string, unknown>>;
   /** Injected by remark-mdx-frontmatter; validated before use. */
   frontmatter?: unknown;
+  /** Injected by rehype-extract-toc's mdx export. */
+  tableOfContents?: unknown;
+  /** Injected by plugins/remark-difficulty-flag.mjs. */
+  hasDifficultyTabs?: unknown;
 }
 
 /*
@@ -47,6 +56,11 @@ const libraries: Library[] = Object.entries(modules)
       slug,
       frontmatter: parseFrontmatter(slug, module.frontmatter),
       Content: module.default,
+      // Build-generated, so a shape check is enough — no need to validate deeply.
+      toc: Array.isArray(module.tableOfContents)
+        ? (module.tableOfContents as TocEntry[])
+        : [],
+      hasDifficultyTabs: module.hasDifficultyTabs === true,
     };
   })
   .sort((a, b) => a.frontmatter.title.localeCompare(b.frontmatter.title));

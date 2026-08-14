@@ -1,10 +1,13 @@
 import type { MDXComponents } from "mdx/types";
 import { CodeBlock } from "~/components/CodeBlock";
+import { DifficultyTabs, Level } from "~/components/DifficultyTabs";
 
 /**
- * Element overrides handed to every MDX body. Keep this the single place that
- * decides how raw markdown elements render — Phase 4's DifficultyTabs joins it.
+ * Everything an MDX body can reach: element overrides plus the components
+ * entries are allowed to use directly.
  */
 export const mdxComponents: MDXComponents = {
   pre: CodeBlock,
+  DifficultyTabs,
+  Level,
 };

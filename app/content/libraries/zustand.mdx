@@ -56,6 +56,27 @@ The whole idea is that a store *is* a hook. You call `create` with a function
 that receives `set`, and you get back a hook you can call from any component —
 no `<Provider>` wrapper, no context, no reducers or action-type constants.
 
+State lives outside React, so you can also read and write it from anywhere —
+event handlers, plain functions, other libraries — through the store's static
+`getState` and `setState` methods.
+
+## How it re-renders
+
+The selector you pass to the hook is the important part. A component that
+selects only `count` re-renders only when `count` changes, not when some
+unrelated slice of the store updates. This is the main practical difference from
+putting the same object into React Context, where every consumer re-renders on
+every change.
+
+Note that `set` **merges** at the top level rather than replacing, so returning a
+partial object is normal and you don't need to spread the rest of the state.
+
+<DifficultyTabs>
+
+<Level value="easy">
+
+Create a store, read from it with a selector, and update it with `set`.
+
 ```js
 import { create } from 'zustand'
 
@@ -66,8 +87,7 @@ const useCounterStore = create((set) => ({
 }))
 ```
 
-Consuming it is a hook call. The argument is a **selector** — the function that
-decides what this component actually cares about:
+Any component can now use it directly — no provider needed anywhere above it:
 
 ```jsx
 function Counter() {
@@ -78,39 +98,141 @@ function Counter() {
 }
 ```
 
-That selector is the important part. A component that selects only `count`
-re-renders only when `count` changes — not when some unrelated slice of the
-store updates. This is the main practical difference from putting the same
-object into React Context, where every consumer re-renders on every change.
+Select one value per call. Selecting the whole store (`useCounterStore()`)
+works, but re-renders the component on every change to any field.
 
-Note that `set` **merges** at the top level rather than replacing, so returning
-a partial object is normal and you don't need to spread the rest of the state.
+</Level>
 
-## Things worth knowing early
+<Level value="medium">
 
-State lives outside React, so you can read and write it from anywhere — event
-handlers, plain functions, other libraries — using the store's static methods:
+Selecting several values at once returns a new object every render, which
+defeats the equality check. `useShallow` compares the selected fields instead of
+the object identity:
 
-```js
-useCounterStore.getState().count
-useCounterStore.setState({ count: 10 })
-```
-
-When you need more than one value at once, selecting an object literal creates a
-new reference on every render, which defeats the re-render check. Use
-`useShallow` to compare the selected fields instead of the object identity:
-
-```js
+```jsx
 import { useShallow } from 'zustand/react/shallow'
 
-const { count, reset } = useCounterStore(
-  useShallow((state) => ({ count: state.count, reset: state.reset })),
+function CounterControls() {
+  const { count, reset } = useCounterStore(
+    useShallow((state) => ({ count: state.count, reset: state.reset })),
+  )
+
+  return <button onClick={reset}>Reset ({count})</button>
+}
+```
+
+In v5 the hook no longer takes an equality function as a second argument, so
+`useShallow` is the supported way to do this.
+
+Persistence and DevTools are middleware that wrap the same store function:
+
+```js
+import { create } from 'zustand'
+import { devtools, persist } from 'zustand/middleware'
+
+const useSettingsStore = create(
+  devtools(
+    persist(
+      (set) => ({
+        theme: 'dark',
+        setTheme: (theme) => set({ theme }),
+      }),
+      { name: 'settings' }, // localStorage key
+    ),
+  ),
 )
 ```
 
-Everything else — persistence to `localStorage`, Redux DevTools, Immer-style
-mutable updates — is opt-in middleware from `zustand/middleware` that wraps the
-same store function.
+Order matters: `devtools` goes outermost so it sees every action, `persist`
+closest to the store function.
 
-*Worked examples across easy, medium, and advanced levels are coming to this
-entry in a later pass.*
+For TypeScript, use the curried form so the middleware types line up:
+
+```ts
+interface SettingsState {
+  theme: 'light' | 'dark'
+  setTheme: (theme: 'light' | 'dark') => void
+}
+
+const useSettingsStore = create<SettingsState>()(
+  persist(
+    (set) => ({
+      theme: 'dark',
+      setTheme: (theme) => set({ theme }),
+    }),
+    { name: 'settings' },
+  ),
+)
+```
+
+The empty `()` after `create<SettingsState>` is required — it's not a typo.
+
+</Level>
+
+<Level value="advanced">
+
+**Subscribing without re-rendering.** For high-frequency values (pointer
+position, scroll offset, animation state), skip React entirely and write to a
+ref. `subscribeWithSelector` lets you watch one slice:
+
+```js
+import { create } from 'zustand'
+import { subscribeWithSelector } from 'zustand/middleware'
+
+const usePointerStore = create(
+  subscribeWithSelector((set) => ({ x: 0, setX: (x) => set({ x }) })),
+)
+
+// Fires on every change to `x`, and re-renders nothing.
+const unsubscribe = usePointerStore.subscribe(
+  (state) => state.x,
+  (x) => {
+    boxRef.current.style.transform = `translateX(${x}px)`
+  },
+)
+```
+
+**A module-level store is a singleton**, which is a problem on the server: one
+user's state would leak into another's request. Create the store per request and
+hand it down through Context, then read it with `useStore`:
+
+```jsx
+import { createStore, useStore } from 'zustand'
+
+const StoreContext = createContext(null)
+
+export function StoreProvider({ children }) {
+  // useState with an initialiser runs it once per component instance.
+  const [store] = useState(() =>
+    createStore((set) => ({ count: 0, increment: () => set((s) => ({ count: s.count + 1 })) })),
+  )
+
+  return <StoreContext value={store}>{children}</StoreContext>
+}
+
+export function useCount() {
+  const store = useContext(StoreContext)
+  return useStore(store, (state) => state.count)
+}
+```
+
+`createStore` is the framework-agnostic store; `useStore` is the hook that
+subscribes a component to one. `create` is just those two combined.
+
+**Tests share module state.** Because a module-level store persists across test
+cases, reset it between them:
+
+```js
+const initialState = useCounterStore.getState()
+
+afterEach(() => {
+  useCounterStore.setState(initialState, true) // `true` replaces instead of merging
+})
+```
+
+That second argument to `setState` is the replace flag — the one place the
+merge-by-default behaviour is worth overriding.
+
+</Level>
+
+</DifficultyTabs>
