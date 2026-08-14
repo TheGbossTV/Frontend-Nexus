@@ -20,15 +20,30 @@ Live at <https://thegbosstv.github.io/Frontend-Nexus/>.
 ## Getting started
 
 Requires **Node 22.12+** — Vite 7 warns and may misbehave on older versions.
-Developed and deployed on **Node 24 LTS**.
+Developed and deployed on **Node 24** (pinned in [`.nvmrc`](.nvmrc), which CI
+reads too, so local and CI can't drift).
 
 ```bash
+node -v            # expect v24.x
 npm install
-npm run dev        # http://localhost:5173/Frontend-Nexus/
-npm run build      # static output in build/client
-npm run preview    # serve build/client the way GitHub Pages does
-npm run typecheck  # react-router typegen + tsc
+npm run dev        # then open http://localhost:5173/Frontend-Nexus/
 ```
+
+| Script | What it does |
+| --- | --- |
+| `npm run dev` | Dev server with HMR |
+| `npm run build` | Static output into `build/client` |
+| `npm run preview` | Serves `build/client` the way GitHub Pages does |
+| `npm run typecheck` | `react-router typegen` + `tsc --noEmit` |
+
+**The dev URL includes the base path.** The site is served at
+`http://localhost:5173/Frontend-Nexus/`, not bare `localhost:5173` — Vite
+redirects the bare root, but the terminal link is the one to click.
+
+**`npm install` warns about a blocked `esbuild` install script.** That's npm 11
+blocking install scripts by default, and it's safe to ignore here: esbuild's
+binary ships in its platform package (`@esbuild/win32-x64`), not that script, so
+builds work without approving it. Leaving it blocked is the safer default.
 
 `npm run preview` deliberately uses [`scripts/preview-pages.mjs`](scripts/preview-pages.mjs)
 rather than `vite preview`. `vite preview` answers *every* path with
@@ -55,6 +70,8 @@ app/
     category.tsx               /category/:slug      entries in one category
     library.tsx                /library/:slug       a single entry
   components/                  Header, Sidebar, ThemeToggle, EntryCard
+    CodeBlock.tsx              IDE-window chrome + copy-to-clipboard island
+    mdx.tsx                    Element overrides handed to every MDX body
   lib/
     frontmatter.ts             The content schema + its validator
     content.ts                 Typed content loader (the only content API)
@@ -62,6 +79,25 @@ app/
   content/
     libraries/*.mdx            The entries themselves
 ```
+
+## Code blocks
+
+Fenced code in MDX is highlighted by Shiki via `rehype-pretty-code` **at build
+time** — configured in [`vite.config.ts`](vite.config.ts) with VS Code's own
+`light-plus` / `dark-plus` themes. The highlighter never reaches the browser;
+only the resulting coloured markup does.
+
+Dual themes mean each token ships both palettes as custom properties
+(`--shiki-light` / `--shiki-dark`), and `app.css` picks between them off the
+`.dark` class. Switching theme is a pure CSS flip with no re-highlighting.
+
+[`CodeBlock.tsx`](app/components/CodeBlock.tsx) replaces the emitted `<pre>`
+with IDE-window chrome (title bar, language label, copy button) and is wired up
+through the MDX `components` map in [`mdx.tsx`](app/components/mdx.tsx). Only the
+copy button is interactive; the block itself stays static HTML.
+
+To highlight a new language, just use its name in the fence — Shiki loads
+grammars at build time, so nothing needs registering.
 
 ## Persisted UI state
 
@@ -144,7 +180,7 @@ Built in phases; each one is verified before the next starts.
 
 - [x] **Phase 1** — Scaffold, routing, content pipeline, deploy
 - [x] **Phase 2** — Sidebar (grouped, collapsible, persisted)
-- [ ] **Phase 3** — Shiki syntax highlighting + IDE-window code blocks
+- [x] **Phase 3** — Shiki syntax highlighting + IDE-window code blocks
 - [ ] **Phase 4** — `<DifficultyTabs>` + sticky in-page TOC
 - [ ] **Phase 5** — Client-side search over a build-time index
 - [ ] **Phase 6** — Content generation pass

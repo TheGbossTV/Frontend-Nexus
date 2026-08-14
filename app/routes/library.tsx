@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import type { Route } from "./+types/library";
 import { SITE_NAME } from "../../site.config";
 import { DraftBadge } from "~/components/EntryCard";
+import { mdxComponents } from "~/components/mdx";
 import { getLibraryBySlug, toTitleCase } from "~/lib/content";
 
 export function meta({ params }: Route.MetaArgs) {
@@ -73,7 +74,7 @@ export default function LibraryPage({ params }: Route.ComponentProps) {
 
       {/* 2. Introduction and any additional prose, straight from the MDX body. */}
       <div className="prose-entry">
-        <Content />
+        <Content components={mdxComponents} />
       </div>
 
       {/* 3. When to use / when not to. */}

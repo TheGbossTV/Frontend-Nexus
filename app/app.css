@@ -117,14 +117,36 @@ html[data-sidebar="hidden"] [data-sidebar-panel] {
   @apply font-semibold text-ink;
 }
 
-.prose-entry :where(code) {
+/* Inline code only — fenced blocks are owned by CodeBlock, see below. */
+.prose-entry :where(code):not(pre code) {
   @apply rounded bg-canvas px-1.5 py-0.5 font-mono text-[0.85em] text-ink;
 }
 
-.prose-entry :where(pre) {
-  @apply my-6 overflow-x-auto rounded-xl border border-edge bg-canvas p-4 text-sm leading-6;
+/*
+ * Shiki dual themes.
+ *
+ * rehype-pretty-code emits both palettes as custom properties on every token
+ * (--shiki-light / --shiki-dark) and tags the elements with a space-separated
+ * `data-theme`. Picking between them is therefore pure CSS: the light values
+ * are the default, and `.dark` on <html> swaps to the dark ones. No Shiki in
+ * the browser bundle, and theme switching costs nothing at runtime.
+ *
+ * The docs show a prefers-color-scheme variant; we use the class strategy so
+ * this tracks the site's own toggle instead of the OS.
+ */
+.prose-entry :where(code[data-theme], code[data-theme] span) {
+  color: var(--shiki-light);
 }
 
+html.dark .prose-entry :where(code[data-theme], code[data-theme] span) {
+  color: var(--shiki-dark);
+}
+
+/* Shiki sets display:grid on <code> so each line is its own row. */
 .prose-entry :where(pre code) {
-  @apply bg-transparent p-0 text-[0.9em];
+  @apply bg-transparent p-0 font-mono;
+}
+
+.prose-entry :where(pre code [data-line]) {
+  @apply px-0;
 }
