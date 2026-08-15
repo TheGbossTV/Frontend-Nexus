@@ -1,0 +1,318 @@
+---
+title: React Hook Form
+category: forms
+tags:
+  - forms
+  - validation
+  - react
+  - performance
+tldr: >-
+  Form state built on uncontrolled inputs. Fields register themselves with a
+  ref, so typing doesn't re-render the form — you only re-render where you
+  actually read a value. Pairs with a schema library for validation.
+whenToUse: >-
+  For almost any non-trivial React form. It handles the parts you'd otherwise
+  hand-roll — dirty and touched tracking, submit state, per-field errors, arrays
+  of fields — and its uncontrolled design means large forms stay fast without
+  memoisation work.
+whenNotTo: >-
+  For a single search box or a one-field filter, where `useState` is less code
+  and less indirection. It's also a poor fit if your form is genuinely
+  controlled by something else — a state machine or a store that owns every
+  keystroke — since you'd be fighting its core design.
+alternatives:
+  - slug: tanstack-form
+    reason: >-
+      Choose it for first-class type inference and framework-agnostic reuse
+      across React, Vue, and Solid. It's the more modern design, at the cost of
+      a much smaller ecosystem of examples and integrations than React Hook
+      Form has accumulated.
+  - slug: formik
+    reason: >-
+      The previous default, and still common in older codebases. It's
+      controlled-by-default, so every keystroke re-renders the form — which is
+      exactly the problem React Hook Form was built to avoid. Little reason to
+      pick it for new work.
+  - slug: react-form-actions
+    reason: >-
+      React 19's built-in form actions with `useActionState` cover
+      progressively-enhanced server submissions without any library. Enough on
+      their own for simple server-driven forms; they don't give you client-side
+      per-field validation, dirty tracking, or field arrays.
+docsUrl: https://react-hook-form.com/
+popularity: high
+status: published
+verified: false
+lastReviewed: "2026-08-15"
+---
+
+## Introduction
+
+React Hook Form manages form state with **uncontrolled inputs**. Current major
+version: **v7** (7.85.x at the time of writing), with React 19 in its supported
+peer range.
+
+That one design decision explains everything else about the library. Most form
+code puts every field in React state, so each keystroke re-renders the form and
+everything in it. React Hook Form instead attaches a ref to each input and lets
+the DOM hold the value. Typing causes no React render at all — the library reads
+the values when it needs them, at submit or validation time.
+
+```jsx
+const { register, handleSubmit } = useForm()
+
+<input {...register('email')} />
+```
+
+`register` returns the `name`, `ref`, `onChange`, and `onBlur` that the input
+needs, so spreading it is the whole integration.
+
+The practical effect is that a fifty-field form performs like a one-field form,
+and you don't need `memo` or `useCallback` scattered around to keep it usable.
+
+## Subscriptions, not renders
+
+The corollary is that reading a value is an explicit subscription. `watch('email')`
+re-renders the calling component when `email` changes; if you never watch it,
+nothing re-renders.
+
+This is why people are sometimes surprised that a value "isn't updating" — they
+expected React state semantics. Nothing is broken; you just haven't subscribed.
+Prefer `useWatch` in a child component over `watch` at the top of the form, so
+the re-render stays scoped to the part that displays the value.
+
+The same applies to `formState`. It's a Proxy, so it only tracks the properties
+you actually destructure — reading `isDirty` subscribes you to dirtiness, and
+ignoring it costs nothing.
+
+## Validation is delegated
+
+React Hook Form doesn't ship a validation language beyond simple built-in rules.
+For anything real, you attach a **resolver** that adapts a schema library —
+`@hookform/resolvers` (v5.x) supports Zod, Valibot, Yup, ArkType, Standard
+Schema, and many others.
+
+Zod is the most common pairing, and it's covered in its own entry. Note that the
+current resolver handles **both Zod 3 and Zod 4** through the same
+`@hookform/resolvers/zod` import — you don't need a version-specific subpath.
+
+<DifficultyTabs>
+
+<Level value="easy">
+
+```bash
+npm install react-hook-form
+```
+
+```jsx
+import { useForm } from 'react-hook-form'
+
+function LoginForm() {
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm()
+
+  function onSubmit(data) {
+    console.log(data) // { email: '...', password: '...' }
+  }
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <input {...register('email', { required: 'Email is required' })} />
+      {errors.email && <p>{errors.email.message}</p>}
+
+      <input type="password" {...register('password', { minLength: 8 })} />
+
+      <button type="submit">Log in</button>
+    </form>
+  )
+}
+```
+
+`handleSubmit` validates first and only calls your function if everything
+passes, so `onSubmit` never has to check.
+
+**Always set `defaultValues`.** It makes fields controlled-from-the-start in the
+library's eyes, makes `reset` meaningful, and avoids React's uncontrolled-to-controlled
+warning:
+
+```jsx
+const { register } = useForm({
+  defaultValues: { email: '', password: '' },
+})
+```
+
+Submit state comes from `formState`, so you don't track it yourself:
+
+```jsx
+const { formState: { isSubmitting } } = useForm()
+
+<button type="submit" disabled={isSubmitting}>
+  {isSubmitting ? 'Saving…' : 'Save'}
+</button>
+```
+
+</Level>
+
+<Level value="medium">
+
+**Schema validation** replaces per-field rules with one source of truth:
+
+```bash
+npm install @hookform/resolvers zod
+```
+
+```jsx
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+
+const schema = z.object({
+  email: z.email('Enter a valid email'),
+  age: z.coerce.number().min(18, 'Must be 18 or over'),
+})
+
+function Form() {
+  const { register, handleSubmit, formState: { errors } } = useForm({
+    resolver: zodResolver(schema),
+    defaultValues: { email: '', age: 0 },
+  })
+  // errors.email.message now comes from the schema
+}
+```
+
+In TypeScript, the schema also types the form — `useForm` infers field names and
+value types, so a typo in `register('emial')` becomes a compile error.
+
+**Controlled components need `Controller`.** Anything that doesn't forward a ref
+to a real input — a design-system select, a date picker — can't be registered
+directly:
+
+```jsx
+import { Controller } from 'react-hook-form'
+
+<Controller
+  name="country"
+  control={control}
+  render={({ field }) => <CustomSelect {...field} />}
+/>
+```
+
+`field` carries `value`, `onChange`, `onBlur`, `name`, and `ref`. Use
+`useController` instead when you're building a reusable wrapper component.
+
+**Choose when validation runs.** The default only validates on submit, which is
+often too late to be helpful:
+
+```jsx
+useForm({
+  mode: 'onTouched',       // validate after first blur
+  reValidateMode: 'onChange', // then live, once it has errored
+})
+```
+
+`onTouched` is usually the kindest default — it doesn't shout at someone
+mid-typing, but corrects them as soon as they fix it.
+
+**Dynamic lists** use `useFieldArray`:
+
+```jsx
+const { fields, append, remove } = useFieldArray({ control, name: 'items' })
+
+{fields.map((field, index) => (
+  <div key={field.id}>
+    <input {...register(`items.${index}.name`)} />
+    <button type="button" onClick={() => remove(index)}>Remove</button>
+  </div>
+))}
+<button type="button" onClick={() => append({ name: '' })}>Add</button>
+```
+
+Use `field.id` as the key, never the array index — the library generates it
+precisely so React can track rows across reordering.
+
+</Level>
+
+<Level value="advanced">
+
+**Surface server errors on the right field.** `handleSubmit` deliberately does
+not swallow errors thrown in your submit handler, so catch them and route them
+back into form state:
+
+```jsx
+async function onSubmit(values) {
+  try {
+    await api.createUser(values)
+  } catch (error) {
+    if (error.field) {
+      setError(error.field, { type: 'server', message: error.message })
+    } else {
+      setError('root.serverError', { message: 'Something went wrong.' })
+    }
+  }
+}
+```
+
+`root` and `root.*` are reserved names for errors that don't belong to any one
+field — they appear in `formState.errors.root` and are cleared on the next
+submit.
+
+**Keep re-renders where you want them.** `watch` at the top of a form re-renders
+the whole form; `useWatch` in a leaf re-renders only that leaf:
+
+```jsx
+function Total({ control }) {
+  const items = useWatch({ control, name: 'items' })
+  return <p>{items.reduce((sum, item) => sum + item.price, 0)}</p>
+}
+```
+
+For the same reason, `useFormState` lets a submit button subscribe to
+`isSubmitting` alone without the parent re-rendering.
+
+**Reset with the server's response**, not with the values you sent. Passing
+values to `reset` makes them the new baseline, so `isDirty` correctly becomes
+false after a successful save:
+
+```jsx
+const saved = await api.save(values)
+reset(saved)
+```
+
+`reset` also takes options such as `keepErrors` and `keepDirtyValues` when you
+need a partial reset.
+
+**Async default values** are supported directly — pass a function that returns a
+promise, and the form stays in a loading state until it resolves:
+
+```jsx
+useForm({
+  defaultValues: async () => {
+    const response = await fetch('/api/profile')
+    return response.json()
+  },
+})
+```
+
+This avoids the common bug of rendering the form with empty values and then
+`reset`-ing it once data arrives, which loses anything the user already typed.
+
+**Validate against other fields** with a custom rule, since cross-field checks
+don't fit per-field validation:
+
+```jsx
+<input
+  {...register('confirmPassword', {
+    validate: (value, formValues) =>
+      value === formValues.password || 'Passwords must match',
+  })}
+/>
+```
+
+With a schema library you'd express the same thing as a refinement on the whole
+object instead, which keeps all validation in one place.
+
+</Level>
+
+</DifficultyTabs>
