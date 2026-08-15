@@ -1,0 +1,336 @@
+---
+title: CSS Modules
+category: styling
+tags:
+  - css
+  - styling
+  - scoped
+  - build-time
+tldr: >-
+  Plain CSS files where every class name is scoped to the file that declares it.
+  The bundler rewrites `.title` into something like `Button_title__x7f2q` and
+  hands your JavaScript an object mapping the original names to the generated
+  ones. Zero runtime.
+whenToUse: >-
+  When you want to write ordinary CSS and the only thing you actually need
+  solved is name collisions. It's the lowest-commitment option here — real
+  stylesheets, real CSS tooling, no new syntax beyond one keyword, no runtime
+  cost, and nothing to un-learn if you leave.
+whenNotTo: >-
+  When you want styles driven by JavaScript values at runtime, or a design
+  system with enforced constraints — CSS Modules deliberately provides neither.
+  It also gives you no help with consistency: nothing stops two files defining
+  slightly different padding, which is exactly the problem utility frameworks
+  exist to prevent.
+alternatives:
+  - slug: tailwind-css
+    reason: >-
+      Choose it when you want the design system enforced — a fixed scale and
+      palette rather than free-form CSS. Both resolve at build time with no
+      runtime cost, so this is a question of constraint versus freedom, not
+      performance.
+  - slug: emotion
+    reason: >-
+      Choose it when styles need JavaScript values — props, computed layout, a
+      theme object. CSS Modules can't see any of that; its stylesheets are
+      static by construction, which is what keeps its runtime cost at zero.
+  - slug: styled-components
+    reason: >-
+      Choose it when you want styles and component definition in one file and
+      one language. CSS Modules keeps them in separate files, which some teams
+      much prefer and others find tedious.
+docsUrl: https://github.com/css-modules/css-modules
+popularity: high
+status: published
+verified: false
+lastReviewed: "2026-08-15"
+---
+
+## Introduction
+
+CSS Modules isn't a library you install — it's a **convention implemented by
+bundlers**, so there's no version number to track. Vite supports it out of the
+box with no configuration; webpack provides it through `css-loader` (currently
+v7); Next.js, Parcel, and Rspack all ship it too.
+
+The idea is small enough to explain in one example. You write normal CSS:
+
+```css
+/* Button.module.css */
+.root {
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+}
+```
+
+The bundler rewrites every class name to something globally unique and gives you
+a lookup object:
+
+```jsx
+import styles from './Button.module.css'
+
+<button className={styles.root} />
+// renders: <button class="_root_1x2y3_1">
+```
+
+That's the entire feature. Nothing about how you write CSS changes — no new
+properties, no template literals, no build-time magic beyond the rename. What
+changes is that `.root` in this file can never collide with `.root` anywhere
+else, which means you can finally use short, obvious class names instead of
+`.product-card__title--large`.
+
+In Vite the only convention is the filename: any file ending `.module.css` is
+treated as a CSS module. Files without it stay global.
+
+## What it deliberately doesn't do
+
+Worth being explicit, because it's easy to expect more than it offers. CSS
+Modules solves **scoping**. It does not give you:
+
+- **Design constraints.** Nothing stops one file using `padding: 12px` and the
+  next using `padding: 0.8rem`.
+- **Runtime values.** The CSS is static; it cannot read props or state. You
+  switch between pre-written classes instead.
+- **Dead-code detection.** An unused class in a module is still shipped.
+
+This narrowness is the point. It's the option with the least to learn and the
+least to regret.
+
+<DifficultyTabs>
+
+<Level value="easy">
+
+No install in Vite — name the file `.module.css` and import it:
+
+```css
+/* Button.module.css */
+.root {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 8px;
+  background: #4f46e5;
+  color: white;
+}
+
+.danger {
+  background: #dc2626;
+}
+```
+
+```jsx
+import styles from './Button.module.css'
+
+function Button({ variant, children }) {
+  return (
+    <button className={variant === 'danger' ? styles.danger : styles.root}>
+      {children}
+    </button>
+  )
+}
+```
+
+Combining classes is just string joining:
+
+```jsx
+<button className={`${styles.root} ${isActive ? styles.active : ''}`} />
+```
+
+Most projects reach for a tiny helper rather than repeat that. `clsx` is the
+common choice:
+
+```jsx
+import clsx from 'clsx'
+
+<button className={clsx(styles.root, isActive && styles.active)} />
+```
+
+Kebab-case class names need bracket access, which is why many codebases just use
+camelCase in the stylesheet:
+
+```jsx
+<button className={styles['is-active']} />  // works
+<button className={styles.isActive} />      // nicer, if you name it that way
+```
+
+</Level>
+
+<Level value="medium">
+
+**`composes` is the feature people miss.** It shares declarations between classes
+without duplicating them, and without the runtime cost of a CSS-in-JS
+abstraction:
+
+```css
+.base {
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+}
+
+.primary {
+  composes: base;
+  background: #4f46e5;
+}
+
+.danger {
+  composes: base;
+  background: #dc2626;
+}
+```
+
+`styles.primary` now returns *two* class names — the generated `base` and the
+generated `primary`. The rule must come before other declarations in the block.
+
+You can also compose across files, which is how a shared set of primitives
+works:
+
+```css
+.button {
+  composes: focusRing from './shared/a11y.module.css';
+}
+```
+
+One real caveat from the spec: when composing classes from **different files**,
+the order in which they apply is *undefined*. Never rely on one overriding the
+other — compose things that set disjoint properties.
+
+**Escaping the scope.** `:global` opts out of renaming, which you need for
+markup you don't control — a third-party widget, or classes applied by a
+library:
+
+```css
+/* Leave this exact name alone. */
+:global(.leaflet-popup) {
+  border-radius: 12px;
+}
+
+/* Scoped parent, global descendant. */
+.map :global(.leaflet-marker) {
+  filter: saturate(0.5);
+}
+```
+
+**Share values with JavaScript** rather than duplicating a breakpoint or colour
+in two languages:
+
+```css
+@value breakpointMobile: 640px;
+
+.sidebar {
+  display: none;
+}
+```
+
+```js
+import { breakpointMobile } from './layout.module.css'
+```
+
+In many setups a CSS custom property is the simpler answer, since it's a web
+standard and needs no bundler feature.
+
+**Configure naming in Vite** when you want readable class names in development:
+
+```js
+// vite.config.js
+export default defineConfig({
+  css: {
+    modules: {
+      generateScopedName: '[name]__[local]___[hash:base64:5]',
+      localsConvention: 'camelCaseOnly',
+    },
+  },
+})
+```
+
+`localsConvention: 'camelCaseOnly'` also enables named imports:
+`import { applyColor } from './example.module.css'`.
+
+</Level>
+
+<Level value="advanced">
+
+**TypeScript does not type your class names by default, and this bites.** Vite's
+ambient declaration is:
+
+```ts
+type CSSModuleClasses = { readonly [key: string]: string }
+```
+
+Every property access type-checks, including typos. `styles.rooot` compiles
+cleanly and evaluates to `undefined`, producing `class="undefined"` — a silent
+failure with no error anywhere.
+
+Two ways to fix it. A language-service plugin gives per-class types from the
+real stylesheet:
+
+```json
+{
+  "compilerOptions": {
+    "plugins": [{ "name": "typescript-plugin-css-modules" }]
+  }
+}
+```
+
+Or generate `.d.ts` files alongside each module as a build step, which has the
+advantage of working with `tsc` on the command line rather than only in the
+editor. Whichever you choose, do choose one — this is the single biggest
+practical weakness of CSS Modules on a TypeScript codebase.
+
+**Variant maps beat conditional chains.** Since styles are static, model
+variants as a lookup rather than branching logic:
+
+```jsx
+import styles from './Button.module.css'
+
+const VARIANTS = {
+  primary: styles.primary,
+  danger: styles.danger,
+  ghost: styles.ghost,
+}
+
+function Button({ variant = 'primary', ...props }) {
+  return <button className={VARIANTS[variant]} {...props} />
+}
+```
+
+Note the contrast with Tailwind's interpolation problem: building the key
+dynamically *does* work here, because the imported object is real at runtime
+rather than a set of strings a scanner has to find. A variant map is still
+better, because it keeps the valid options greppable and type-checkable.
+
+**Combine with custom properties for the dynamic parts.** This is how you get
+runtime-driven styling without a runtime CSS library — the class stays static,
+and only a variable changes:
+
+```css
+.progress {
+  width: var(--progress, 0%);
+  transition: width 150ms ease-out;
+}
+```
+
+```jsx
+<div className={styles.progress} style={{ '--progress': `${percent}%` }} />
+```
+
+That pattern covers most of what people reach for CSS-in-JS to do, at zero
+runtime cost.
+
+**Global stylesheets still have a job.** Resets, `@font-face`, and custom
+property definitions belong in a plain `.css` file imported once at the root —
+scoping them would defeat the purpose:
+
+```css
+/* global.css — imported in main.tsx, not a module */
+:root {
+  --brand: #4f46e5;
+}
+```
+
+**Server rendering is a non-issue**, which is worth stating: the output is an
+ordinary stylesheet and a static class string. There's no runtime to hydrate, no
+style injection to coordinate, and it works unchanged in React Server
+Components — where runtime CSS-in-JS cannot go at all.
+
+</Level>
+
+</DifficultyTabs>
