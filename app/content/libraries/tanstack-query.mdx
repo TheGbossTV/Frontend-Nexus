@@ -1,0 +1,344 @@
+---
+title: TanStack Query
+category: data-fetching
+tags:
+  - data-fetching
+  - cache
+  - server-state
+  - async
+tldr: >-
+  Async state management for server data. You give it a key and a function that
+  fetches, and it handles caching, deduplication, background refetching, stale
+  data, retries, and loading states — the parts everyone reimplements badly with
+  `useEffect`.
+whenToUse: >-
+  Whenever you're displaying data that lives on a server. The moment you find
+  yourself writing `useEffect` with a loading flag, an error flag, and a
+  cancellation guard, you're building a worse version of this. It's especially
+  valuable when the same data appears on several screens, since it dedupes and
+  shares one cache.
+whenNotTo: >-
+  For a single fetch on a single page that never revalidates — a plain `fetch`
+  is less machinery. It's also the wrong layer for client-only state like form
+  drafts or UI toggles; those belong in a state library, and mixing them into a
+  server cache causes confusion about what's authoritative.
+alternatives:
+  - slug: redux-toolkit
+    reason: >-
+      RTK Query is built into Redux Toolkit and covers the same ground. Choose
+      it if you already run a Redux store — one dependency, one set of
+      DevTools. TanStack Query is the better standalone choice and has the
+      richer feature set for pagination and infinite lists.
+  - slug: native-fetch-api
+    reason: >-
+      What TanStack Query calls under the hood. Enough on its own for one-shot
+      requests, server-side loading, or anything already cached by a framework
+      router — you only need a cache layer once the same data is requested from
+      more than one place.
+  - slug: swr
+    reason: >-
+      Smaller and more opinionated, covering the common stale-while-revalidate
+      case with less API surface. TanStack Query gives you far more control over
+      mutations, invalidation, and pagination when you need it.
+docsUrl: https://tanstack.com/query/latest
+popularity: high
+status: published
+verified: false
+lastReviewed: "2026-08-15"
+---
+
+## Introduction
+
+TanStack Query — still widely called React Query — manages **server state**.
+Current major version: **v5** (5.101.x at the time of writing), supporting React
+18 and 19.
+
+The framing is the most useful thing it gives you. Client state is state you
+own: it's synchronous, it's always correct, and nobody else can change it.
+Server state is none of those things. It lives somewhere else, it can change
+without telling you, it arrives asynchronously, and your copy is out of date the
+moment you receive it.
+
+Treating the second like the first is why so much data-fetching code turns into
+a pile of `useEffect`, loading booleans, race-condition guards, and stale
+closures. TanStack Query treats server data as a **cache you keep fresh** rather
+than state you own:
+
+```jsx
+const { data, isPending, error } = useQuery({
+  queryKey: ['todos'],
+  queryFn: fetchTodos,
+})
+```
+
+That call gives you caching, request deduplication across components,
+background revalidation, retries with backoff, and correct behaviour when
+requests resolve out of order.
+
+## staleTime and gcTime are the two settings that matter
+
+Almost every "why is it refetching so much?" question comes down to these, and
+they're easy to conflate.
+
+- **`staleTime`** — how long data is considered *fresh*. While fresh, mounting
+  another component with the same key uses the cache and fires no request. The
+  default is `0`, meaning data is stale immediately, which surprises people.
+- **`gcTime`** — how long *unused* data is kept before being garbage collected.
+  It only starts counting once nothing is observing the query. Default: 5
+  minutes.
+
+`gcTime` was called `cacheTime` before v5, and was renamed precisely because the
+old name suggested "how long data is cached for", which isn't what it does.
+
+If your data rarely changes, raising `staleTime` is the single highest-value
+adjustment you can make.
+
+## Query keys are dependency arrays
+
+A query key identifies a cache entry, and anything the fetch depends on belongs
+in it:
+
+```jsx
+useQuery({
+  queryKey: ['todos', { status, page }],
+  queryFn: () => fetchTodos({ status, page }),
+})
+```
+
+Change `page` and it's a different entry, fetched and cached separately. Leave
+`page` out of the key and you get one entry serving every page — the cache
+equivalent of a missing dependency in `useEffect`.
+
+<DifficultyTabs>
+
+<Level value="easy">
+
+```bash
+npm install @tanstack/react-query
+```
+
+Wrap the app once with a client:
+
+```jsx
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+
+const queryClient = new QueryClient()
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <Todos />
+    </QueryClientProvider>
+  )
+}
+```
+
+Then query anywhere:
+
+```jsx
+import { useQuery } from '@tanstack/react-query'
+
+function Todos() {
+  const { data, isPending, isError, error } = useQuery({
+    queryKey: ['todos'],
+    queryFn: async () => {
+      const response = await fetch('/api/todos')
+      if (!response.ok) throw new Error('Failed to load todos')
+      return response.json()
+    },
+  })
+
+  if (isPending) return <p>Loading…</p>
+  if (isError) return <p>{error.message}</p>
+
+  return <ul>{data.map((todo) => <li key={todo.id}>{todo.title}</li>)}</ul>
+}
+```
+
+Two things that trip people up:
+
+- **Throw on failure.** `fetch` doesn't reject on a 404 or 500, so if you don't
+  check `response.ok` yourself, an error page body becomes "successful" data.
+- **`isPending`, not `isLoading`.** v5 renamed the initial-load flag.
+  `isLoading` still exists but now means `isPending && isFetching` — useful for
+  spinners that should ignore background refetches.
+
+</Level>
+
+<Level value="medium">
+
+**Mutations** handle writes, and pair with invalidation to refresh what changed:
+
+```jsx
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+
+function AddTodo() {
+  const queryClient = useQueryClient()
+
+  const { mutate, isPending } = useMutation({
+    mutationFn: (newTodo) =>
+      fetch('/api/todos', {
+        method: 'POST',
+        body: JSON.stringify(newTodo),
+      }).then((r) => r.json()),
+
+    onSuccess: () => {
+      // Marks matching queries stale and refetches the active ones.
+      queryClient.invalidateQueries({ queryKey: ['todos'] })
+    },
+  })
+
+  return (
+    <button onClick={() => mutate({ title: 'New' })} disabled={isPending}>
+      Add
+    </button>
+  )
+}
+```
+
+`invalidateQueries` matches by key *prefix*, so `['todos']` invalidates
+`['todos', { page: 1 }]` and every other variation. Structuring keys
+hierarchically is what makes this ergonomic.
+
+Use `mutate` for fire-and-forget with callbacks; `mutateAsync` returns a promise
+you must catch yourself.
+
+**Dependent queries** wait for a prerequisite via `enabled`:
+
+```jsx
+const { data: user } = useQuery({ queryKey: ['user'], queryFn: fetchUser })
+
+useQuery({
+  queryKey: ['projects', user?.id],
+  queryFn: () => fetchProjects(user.id),
+  enabled: Boolean(user?.id),
+})
+```
+
+**Keep the previous page visible** while the next one loads, instead of
+flashing a spinner between pages:
+
+```jsx
+import { keepPreviousData } from '@tanstack/react-query'
+
+useQuery({
+  queryKey: ['todos', page],
+  queryFn: () => fetchTodos(page),
+  placeholderData: keepPreviousData,
+})
+```
+
+This replaced v4's `keepPreviousData: true` option.
+
+**Set sensible defaults once** rather than per query:
+
+```js
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { staleTime: 60_000, retry: 2 },
+  },
+})
+```
+
+</Level>
+
+<Level value="advanced">
+
+**Optimistic updates — note the v5 callback signature carefully.** Most examples
+online are out of date here. The value returned by `onMutate` arrives as the
+third argument, now named `onMutateResult`; the fourth argument, `context`, is a
+different object entirely holding `client`, `meta`, and `mutationKey`:
+
+```jsx
+useMutation({
+  mutationFn: updateTodo,
+
+  onMutate: async (newTodo) => {
+    // Stop in-flight refetches from overwriting the optimistic write.
+    await queryClient.cancelQueries({ queryKey: ['todos'] })
+
+    const previousTodos = queryClient.getQueryData(['todos'])
+    queryClient.setQueryData(['todos'], (old) =>
+      old.map((todo) => (todo.id === newTodo.id ? newTodo : todo)),
+    )
+
+    // Whatever you return here becomes `onMutateResult`.
+    return { previousTodos }
+  },
+
+  onError: (error, variables, onMutateResult) => {
+    queryClient.setQueryData(['todos'], onMutateResult.previousTodos)
+  },
+
+  onSettled: () => {
+    queryClient.invalidateQueries({ queryKey: ['todos'] })
+  },
+})
+```
+
+The `cancelQueries` call is the part people omit, and it causes a subtle bug: a
+refetch that was already in flight resolves after your optimistic write and
+silently reverts it.
+
+**`select` transforms without re-fetching**, and only re-renders when the
+selected slice changes:
+
+```jsx
+useQuery({
+  queryKey: ['todos'],
+  queryFn: fetchTodos,
+  select: (todos) => todos.filter((todo) => !todo.done),
+})
+```
+
+**Infinite lists** have their own hook, with the key detail being how the next
+page parameter is derived:
+
+```jsx
+const { data, fetchNextPage, hasNextPage } = useInfiniteQuery({
+  queryKey: ['todos'],
+  queryFn: ({ pageParam }) => fetchTodos(pageParam),
+  initialPageParam: 0,
+  getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+})
+
+// data.pages is an array of page results.
+```
+
+Returning `undefined` from `getNextPageParam` is what sets `hasNextPage` false.
+
+**Prefetch on intent** to make navigation feel instant — hovering a link is
+usually enough warning:
+
+```jsx
+<Link
+  to={`/todos/${id}`}
+  onMouseEnter={() =>
+    queryClient.prefetchQuery({
+      queryKey: ['todo', id],
+      queryFn: () => fetchTodo(id),
+    })
+  }
+/>
+```
+
+**Centralise keys.** Scattered string arrays are the main long-term maintenance
+problem, because invalidation depends on getting them exactly right:
+
+```js
+export const todoKeys = {
+  all: ['todos'],
+  list: (filters) => [...todoKeys.all, 'list', filters],
+  detail: (id) => [...todoKeys.all, 'detail', id],
+}
+
+queryClient.invalidateQueries({ queryKey: todoKeys.all }) // everything
+```
+
+**Errors reach an error boundary** with `throwOnError` — v5's rename of
+`useErrorBoundary` — which lets you handle failures declaratively instead of
+checking `isError` in every component.
+
+</Level>
+
+</DifficultyTabs>
