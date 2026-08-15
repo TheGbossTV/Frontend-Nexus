@@ -1,0 +1,294 @@
+---
+title: Jotai
+category: state-management
+tags:
+  - state
+  - react
+  - atoms
+  - suspense
+tldr: >-
+  Atomic state for React. You declare small, independent `atom`s and compose
+  them; components subscribe to exactly the atoms they read, so updates stay
+  surgical. Feels like `useState` that any component can share.
+whenToUse: >-
+  When your state breaks naturally into many small independent values rather
+  than one big object, and you want fine-grained re-renders without hand-writing
+  selectors. It's a particularly good fit when values derive from other values —
+  derived atoms recompute automatically and only where they're actually used.
+whenNotTo: >-
+  When you want one obvious place to look for the shape of your state, or an
+  auditable action log — atoms are defined wherever you like, which is
+  liberating on small apps and disorienting on large ones without discipline.
+  Also skip it for pure server-state caching, which a data-fetching library
+  handles better.
+alternatives:
+  - slug: zustand
+    reason: >-
+      Store-first instead of atom-first. Choose Zustand when you'd rather have
+      one object with selectors narrowing what re-renders; choose Jotai when
+      you'd rather have many small values and no selector layer at all. Zustand
+      also keeps state outside React entirely, which Jotai only does via an
+      explicit store.
+  - slug: redux-toolkit
+    reason: >-
+      Choose it when you want a centralised, auditable action/reducer flow and
+      time-travel debugging. Jotai is deliberately the opposite — bottom-up and
+      decentralised — so it gives up that structure in exchange for far less
+      ceremony.
+  - slug: react-context
+    reason: >-
+      Jotai is closest in spirit to Context, and solves its main weakness:
+      Context re-renders every consumer on any change, while an atom only wakes
+      the components that read it. If your shared value changes rarely, Context
+      alone is still enough.
+docsUrl: https://jotai.org/
+popularity: medium
+status: published
+verified: false
+lastReviewed: "2026-08-15"
+---
+
+## Introduction
+
+Jotai (Japanese for "state") is an atomic state library for React from the
+pmnd.rs team — the same group behind Zustand. Current major version: **v2**
+(2.20.x at the time of writing); a v3 is in alpha.
+
+The unit is the **atom**: a tiny piece of state, declared outside components.
+An atom is not a value — it's a *config object*, a key. The actual value lives
+in a store, which means the same atom can hold different values in different
+Providers, and atoms can be defined in any file without creating a global
+singleton.
+
+Reading an atom looks like `useState`, and the mental model transfers almost
+directly. The difference is that any component can read the same atom, and only
+components reading a given atom re-render when it changes — no selector
+function, no memoisation, no provider required for the default store.
+
+## Derived atoms are the real feature
+
+An atom whose read function takes `get` derives from other atoms, and the
+dependency graph is tracked automatically:
+
+```js
+const priceAtom = atom(10)
+const quantityAtom = atom(2)
+const totalAtom = atom((get) => get(priceAtom) * get(quantityAtom))
+```
+
+`totalAtom` recomputes when either input changes, and only components reading
+`totalAtom` re-render. You never register dependencies or write a memo — reading
+an atom inside a read function *is* the subscription. This is what people mean
+when they call Jotai bottom-up: you compose upward from primitives rather than
+slicing downward from a store.
+
+## Deprecations worth knowing
+
+Two utilities you'll still see in older tutorials are on the way out in v2:
+
+- **`loadable`** is deprecated in favour of `unwrap`.
+- **`atomFamily`** is deprecated in `jotai/utils` and will be removed in v3;
+  it moved to the separate `jotai-family` package.
+
+<DifficultyTabs>
+
+<Level value="easy">
+
+An atom is declared outside the component, and read with a `useState`-shaped
+hook:
+
+```jsx
+import { atom, useAtom } from 'jotai'
+
+const countAtom = atom(0)
+
+function Counter() {
+  const [count, setCount] = useAtom(countAtom)
+
+  return <button onClick={() => setCount(count + 1)}>Count: {count}</button>
+}
+```
+
+No provider is needed — atoms use a default store unless you opt into one.
+Any other component reading `countAtom` shares the same value.
+
+When a component only reads, or only writes, use the narrower hooks. A component
+using `useSetAtom` does **not** re-render when the value changes, which matters
+for buttons that only dispatch:
+
+```jsx
+import { useAtomValue, useSetAtom } from 'jotai'
+
+function CountDisplay() {
+  const count = useAtomValue(countAtom) // re-renders on change
+  return <p>{count}</p>
+}
+
+function IncrementButton() {
+  const setCount = useSetAtom(countAtom) // never re-renders
+  return <button onClick={() => setCount((c) => c + 1)}>+1</button>
+}
+```
+
+Derived atoms compose the primitives:
+
+```js
+const doubledAtom = atom((get) => get(countAtom) * 2)
+```
+
+</Level>
+
+<Level value="medium">
+
+**Read-write derived atoms** let you present a computed value and accept writes
+back through it:
+
+```js
+const priceAtom = atom(10)
+
+const discountedAtom = atom(
+  (get) => get(priceAtom) * 0.9,
+  (get, set, newPrice) => {
+    set(priceAtom, newPrice / 0.9)
+  },
+)
+```
+
+**Write-only atoms are how you model actions.** Pass `null` as the read value
+and the atom becomes a callable unit of update logic — the closest Jotai gets to
+a reducer:
+
+```js
+const addTodoAtom = atom(null, (get, set, text) => {
+  set(todosAtom, [...get(todosAtom), { id: crypto.randomUUID(), text }])
+})
+
+function AddTodo() {
+  const addTodo = useSetAtom(addTodoAtom)
+  return <button onClick={() => addTodo('Buy milk')}>Add</button>
+}
+```
+
+Keeping writes in atoms rather than components means the logic is testable and
+reusable, and components stay dumb.
+
+**Persistence** is one utility away:
+
+```js
+import { atomWithStorage } from 'jotai/utils'
+
+const themeAtom = atomWithStorage('theme', 'dark')
+```
+
+By default the server-rendered value is the initial value and the stored one
+arrives after hydration. If you'd rather read storage immediately, pass
+`{ getOnInit: true }` — at the cost of a possible hydration mismatch if the
+markup was prerendered.
+
+**Scope state with a Provider** when you need more than one independent copy —
+per-route, per-modal, or per-request on the server:
+
+```jsx
+import { Provider, createStore } from 'jotai'
+
+const store = createStore()
+store.set(countAtom, 5)
+
+<Provider store={store}>
+  <App />
+</Provider>
+```
+
+Without a `store` prop, `<Provider>` still creates its own isolated store for
+that subtree.
+
+</Level>
+
+<Level value="advanced">
+
+**Async atoms suspend.** A read function returning a promise makes the atom
+async, and the component reading it gets the resolved value — React Suspense
+handles the waiting:
+
+```jsx
+const userIdAtom = atom(1)
+
+const userAtom = atom(async (get) => {
+  const response = await fetch(`/api/users/${get(userIdAtom)}`)
+  return response.json()
+})
+
+function Profile() {
+  const user = useAtomValue(userAtom) // already resolved, not a promise
+  return <h1>{user.name}</h1>
+}
+
+function App() {
+  return (
+    <Suspense fallback={<p>Loading…</p>}>
+      <Profile />
+    </Suspense>
+  )
+}
+```
+
+**To handle loading inline instead of suspending, use `unwrap`.** Note that the
+older `loadable` utility is deprecated in favour of it:
+
+```js
+import { unwrap } from 'jotai/utils'
+
+// Renders `undefined` while pending rather than suspending the tree.
+const maybeUserAtom = unwrap(userAtom)
+```
+
+**Reading and writing outside React.** The store is a plain object with `get`,
+`set`, and `sub`, which makes it usable from event handlers, tests, or
+non-React code:
+
+```js
+import { createStore } from 'jotai'
+
+const store = createStore()
+
+store.set(countAtom, 42)
+store.get(countAtom) // 42
+
+const unsubscribe = store.sub(countAtom, () => {
+  console.log('changed to', store.get(countAtom))
+})
+```
+
+**Parameterised atoms** — one atom per id, created on demand. Import it from
+`jotai-family`; the `jotai/utils` export is deprecated and goes away in v3:
+
+```js
+import { atomFamily } from 'jotai-family'
+
+const todoAtomFamily = atomFamily((id) => atom({ id, done: false }))
+
+todoAtomFamily('abc') // creates it, or returns the existing atom
+```
+
+The catch is memory: internally it's a `Map` keyed by param, so entries live
+forever unless you clear them. Call `todoAtomFamily.remove(id)` when a param
+retires, or set a policy with `setShouldRemove`.
+
+**Splitting a list atom** gives each item its own atom, so editing one row
+doesn't re-render the others:
+
+```js
+import { splitAtom } from 'jotai/utils'
+
+const todosAtom = atom([{ text: 'a' }, { text: 'b' }])
+const todoAtomsAtom = splitAtom(todosAtom)
+
+function TodoList() {
+  const [todoAtoms] = useAtom(todoAtomsAtom)
+  return todoAtoms.map((todoAtom, i) => <TodoRow key={i} todoAtom={todoAtom} />)
+}
+```
+
+</Level>
+
+</DifficultyTabs>
