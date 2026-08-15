@@ -1,0 +1,348 @@
+---
+title: React Router
+category: routing
+tags:
+  - routing
+  - react
+  - spa
+  - ssr
+tldr: >-
+  The standard router for React, now available in three escalating modes —
+  declarative URL matching, data loading with loaders and actions, or a full
+  framework with server rendering and typed routes. You adopt only as much as
+  you need.
+whenToUse: >-
+  For essentially any React app that has more than one screen. Declarative mode
+  is a small dependency that does one job well; data mode is worth it as soon as
+  you're fetching per route; framework mode is a genuine alternative to reaching
+  for Next.js when you want SSR or static output without leaving Vite.
+whenNotTo: >-
+  When your framework already routes for you — Next.js, TanStack Start, and
+  Astro all bring their own, and running two routers is a mess. Also overkill
+  for a single-screen app or a widget embedded in someone else's page, where a
+  few conditionals beat a router.
+alternatives:
+  - slug: tanstack-router
+    reason: >-
+      Choose it for the strongest type safety available — fully typed routes,
+      params, and search params, with search params treated as first-class
+      typed state. React Router has far broader adoption and more prior art to
+      copy from.
+  - slug: nextjs
+    reason: >-
+      A whole framework rather than a router, with file-based routing and React
+      Server Components at the centre. Choose it when you want the full
+      opinionated stack; choose React Router's framework mode when you want
+      routing and SSR while staying on plain Vite.
+  - slug: wouter
+    reason: >-
+      A tiny hooks-based router, a fraction of the size, covering matching and
+      navigation and nothing else. Choose it when bundle size dominates and you
+      have no need for loaders, actions, or server rendering.
+docsUrl: https://reactrouter.com/
+popularity: high
+status: published
+verified: false
+lastReviewed: "2026-08-15"
+---
+
+## Introduction
+
+React Router is the long-standing routing library for React. Current major
+version: **v8** (8.3.x at the time of writing). v7 remains widely deployed and
+is still published under a `version-7` tag (7.18.x).
+
+The most important thing to understand is that it isn't one library any more —
+it's **three modes**, layered so you take on only what you need. Most confusion
+when reading tutorials comes from not knowing which mode the example is written
+in.
+
+## The three modes
+
+**Declarative** — URL matching and navigation, nothing else. You render routes
+as components inside your React tree. This is what React Router has always been,
+and it's still a perfectly good choice.
+
+**Data** — route configuration moves *outside* React rendering, into a router
+object. That relocation is what enables `loader` and `action` functions: because
+the router knows the routes before rendering, it can start fetching for a route
+as soon as navigation begins, rather than after the component mounts. This kills
+the render-then-fetch waterfall.
+
+**Framework** — adds a Vite plugin on top of data mode: typed route modules,
+automatic code splitting, server rendering, and static prerendering. This is the
+mode that competes with Next.js, while staying on ordinary Vite.
+
+All three are fully supported and actively developed. Moving up a level is
+additive rather than a rewrite.
+
+## Coming from v6 or v7
+
+v8 was deliberately a dull upgrade — the v7 future flags simply became the
+defaults and the flags were deleted. The changes that will actually affect you:
+
+- **`react-router-dom` is gone.** Install `react-router`. Most APIs import from
+  `react-router`; the few DOM-specific ones, including `RouterProvider` for the
+  browser, come from `react-router/dom`.
+- **Middleware is baseline**, no longer behind a flag, with request context
+  standardised on `RouterContextProvider`.
+- **Route module splitting is on by default.**
+- **Higher floors** for framework mode: Node 22.22+, React 19.2.7+, Vite 7+.
+
+If you're on v7 with the future flags already enabled, there is very little left
+to do. The project has moved to a yearly major release cadence, so this pattern
+of incremental, flag-driven upgrades is the plan going forward.
+
+<DifficultyTabs>
+
+<Level value="easy">
+
+Declarative mode. Routes are components:
+
+```bash
+npm install react-router
+```
+
+```jsx
+import { BrowserRouter, Route, Routes } from 'react-router'
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/users/:id" element={<User />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </BrowserRouter>
+  )
+}
+```
+
+Navigate with `Link`, never a plain anchor — an `a` tag triggers a full page
+reload and throws away your application state:
+
+```jsx
+import { Link } from 'react-router'
+
+<Link to="/about">About</Link>
+```
+
+Read the dynamic segment with `useParams`, and navigate in code with
+`useNavigate`:
+
+```jsx
+import { useNavigate, useParams } from 'react-router'
+
+function User() {
+  const { id } = useParams()
+  const navigate = useNavigate()
+
+  return <button onClick={() => navigate('/users')}>Back to {id}</button>
+}
+```
+
+`NavLink` knows whether it's active, which is what you want for navigation menus:
+
+```jsx
+<NavLink
+  to="/about"
+  className={({ isActive }) => (isActive ? 'font-bold' : undefined)}
+>
+  About
+</NavLink>
+```
+
+</Level>
+
+<Level value="medium">
+
+Data mode. The route config moves out of the tree, which is what lets the router
+fetch before rendering:
+
+```jsx
+import { createBrowserRouter, RouterProvider } from 'react-router/dom'
+
+const router = createBrowserRouter([
+  {
+    path: '/',
+    element: <Root />,
+    children: [
+      {
+        path: 'users/:id',
+        element: <User />,
+        loader: async ({ params }) => {
+          const response = await fetch(`/api/users/${params.id}`)
+          if (!response.ok) throw new Response('Not found', { status: 404 })
+          return response.json()
+        },
+        errorElement: <UserError />,
+      },
+    ],
+  },
+])
+
+<RouterProvider router={router} />
+```
+
+The component reads already-loaded data — there's no loading state to manage,
+because the route doesn't render until the loader resolves:
+
+```jsx
+import { useLoaderData } from 'react-router'
+
+function User() {
+  const user = useLoaderData()
+  return <h1>{user.name}</h1>
+}
+```
+
+**Throwing a `Response` from a loader** is how you signal 404s and errors; the
+nearest `errorElement` catches it, and `useRouteError` gives you the detail.
+
+**Nested routes render through `Outlet`**, so a layout persists across child
+navigations instead of remounting:
+
+```jsx
+function Root() {
+  return (
+    <>
+      <Nav />
+      <Outlet />
+    </>
+  )
+}
+```
+
+**Writes go through actions**, and `Form` submits to them without you wiring up
+`onSubmit`, `preventDefault`, or fetch:
+
+```jsx
+import { Form } from 'react-router'
+
+// route: { path: 'users/new', action: createUser, element: <NewUser /> }
+async function createUser({ request }) {
+  const formData = await request.formData()
+  await api.create(Object.fromEntries(formData))
+  return redirect('/users')
+}
+
+function NewUser() {
+  return (
+    <Form method="post">
+      <input name="name" />
+      <button type="submit">Create</button>
+    </Form>
+  )
+}
+```
+
+After an action, loaders on the page revalidate automatically — you don't
+invalidate anything by hand.
+
+**`useNavigation`** exposes pending state for the whole transition, which is how
+you show a global loading indicator:
+
+```jsx
+const navigation = useNavigation()
+const isNavigating = navigation.state !== 'idle'
+```
+
+</Level>
+
+<Level value="advanced">
+
+Framework mode. Add the Vite plugin and a route config file:
+
+```js
+// vite.config.ts
+import { reactRouter } from '@react-router/dev/vite'
+
+export default defineConfig({ plugins: [reactRouter()] })
+```
+
+```ts
+// app/routes.ts
+import { type RouteConfig, index, route } from '@react-router/dev/routes'
+
+export default [
+  index('routes/home.tsx'),
+  route('users/:id', 'routes/user.tsx'),
+] satisfies RouteConfig
+```
+
+Each route becomes a **module** exporting the pieces the router needs, with
+generated types tying them together:
+
+```tsx
+import type { Route } from './+types/user'
+
+export async function loader({ params }: Route.LoaderArgs) {
+  return { user: await getUser(params.id) }
+}
+
+export function meta({ data }: Route.MetaArgs) {
+  return [{ title: data.user.name }]
+}
+
+export default function User({ loaderData }: Route.ComponentProps) {
+  return <h1>{loaderData.user.name}</h1>
+}
+```
+
+`Route.LoaderArgs` and friends come from `react-router typegen`, so `params.id`
+is typed from the route path and `loaderData` is typed from the loader's return.
+Rename the route and the types follow.
+
+**Static output without a server.** Set `ssr: false` and list paths to
+prerender, and the build emits plain HTML — deployable to any static host:
+
+```ts
+// react-router.config.ts
+export default {
+  ssr: false,
+  async prerender() {
+    return ['/', ...(await getSlugs()).map((slug) => `/posts/${slug}`)]
+  },
+} satisfies Config
+```
+
+If you're deploying under a subpath, set `basename` here and Vite's `base` to
+match. Note that prerendered HTML is written *nested under* the basename, which
+matters when your host already serves the directory as that path.
+
+**Middleware runs around loaders and actions** — baseline in v8, and the right
+place for auth, logging, or per-request context:
+
+```ts
+export const middleware: Route.MiddlewareFunction[] = [
+  async ({ context, request }, next) => {
+    const user = await authenticate(request)
+    if (!user) throw redirect('/login')
+    context.set(userContext, user)
+    return next()
+  },
+]
+```
+
+**`clientLoader` for client-only data**, with `hydrate` control when you want the
+server pass skipped entirely.
+
+**Load without navigating** using `useFetcher` — for a like button or an inline
+edit that shouldn't change the URL:
+
+```jsx
+const fetcher = useFetcher()
+
+<fetcher.Form method="post" action="/api/like">
+  <button>Like</button>
+</fetcher.Form>
+```
+
+`fetcher.state` and `fetcher.data` give you pending and result state without
+touching navigation history.
+
+</Level>
+
+</DifficultyTabs>
