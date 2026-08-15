@@ -1,0 +1,316 @@
+---
+title: React Testing Library
+category: testing
+tags:
+  - testing
+  - react
+  - dom
+  - accessibility
+tldr: >-
+  Renders components and lets you query them the way a user would find things —
+  by role, label, and text rather than by class name or component internals.
+  It's a querying library, not a test runner; pair it with Vitest or Jest.
+whenToUse: >-
+  For testing React components at the behaviour level: what renders, what
+  happens when someone clicks or types, what appears after data loads. Because
+  its queries lean on the accessibility tree, tests that are easy to write tend
+  to correlate with markup that's actually accessible.
+whenNotTo: >-
+  For pure logic with no UI — test those functions directly, without rendering
+  anything. It's also not the tool for full user journeys across pages, or for
+  anything depending on real layout and geometry, which jsdom does not compute.
+alternatives:
+  - slug: playwright
+    reason: >-
+      Real browsers and full end-to-end journeys, plus its own component-testing
+      mode. Choose it when you need real layout, real navigation, or
+      cross-browser coverage — things jsdom can only approximate. Slower, so
+      most projects use both.
+  - slug: cypress
+    reason: >-
+      Component and end-to-end testing with an interactive time-travel debugger
+      that's genuinely pleasant for diagnosing failures. Heavier than a
+      jsdom-based unit test, and generally chosen for the end-to-end layer.
+  - slug: enzyme
+    reason: >-
+      The previous generation, built around inspecting component internals and
+      state. It has no official support for modern React, and its whole approach
+      — asserting on implementation rather than output — is what Testing Library
+      was created to move away from.
+docsUrl: https://testing-library.com/docs/react-testing-library/intro/
+popularity: high
+status: published
+verified: false
+lastReviewed: "2026-08-15"
+---
+
+## Introduction
+
+React Testing Library renders components into a DOM and gives you queries for
+finding things inside them. Current major version: **v16**
+(`@testing-library/react` 16.3.x), supporting React 18 and 19.
+
+It is not a test runner. It has no `describe`, no `expect`, no watch mode — you
+bring Vitest or Jest for that. What it provides is `render` plus a set of
+queries.
+
+The guiding principle is stated in its own docs: *the more your tests resemble
+the way your software is used, the more confidence they can give you.* In
+practice that means querying the way a person would — "the button labelled Save"
+— rather than the way a developer might reach for it, by CSS class or component
+instance.
+
+The payoff is that tests survive refactoring. Rename a component, restructure
+the markup, or swap a styling approach, and a test asserting on visible
+behaviour still passes. A test asserting on internal state breaks for no good
+reason.
+
+## Query priority is the core skill
+
+Most of getting good at this library is picking the right query. The
+recommended order, best first:
+
+1. **`getByRole`** — with the `name` option. Matches the accessibility tree, so
+   it checks what assistive technology exposes. Covers most cases.
+2. **`getByLabelText`** — for form fields; also verifies the label is properly
+   associated.
+3. **`getByPlaceholderText`**, **`getByText`**, **`getByDisplayValue`**.
+4. **`getByAltText`**, **`getByTitle`**.
+5. **`getByTestId`** — the escape hatch, for things with no accessible handle.
+
+If you can't find an element by role or label, that's often a real
+accessibility problem rather than a testing inconvenience — an icon-only button
+with no accessible name, say. The awkward test is a signal.
+
+Each query has three variants, and mixing them up causes most confusing
+failures:
+
+- **`getBy…`** — throws if not found. Use when it must exist now.
+- **`queryBy…`** — returns `null` if not found. **The only one to use for
+  asserting absence.**
+- **`findBy…`** — returns a promise, retrying until it appears. Use for anything
+  async.
+
+<DifficultyTabs>
+
+<Level value="easy">
+
+Install the library, the DOM matchers, and — since v16 — `@testing-library/dom`
+explicitly, because it's a peer dependency rather than bundled:
+
+```bash
+npm install -D @testing-library/react @testing-library/dom @testing-library/jest-dom @testing-library/user-event
+```
+
+With Vitest, one setup file wires up the matchers and cleanup:
+
+```ts
+// vitest.setup.ts
+import '@testing-library/jest-dom/vitest'
+```
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./vitest.setup.ts'],
+  },
+})
+```
+
+The `/vitest` entry point registers every jest-dom matcher on Vitest's `expect`.
+With `globals: true`, cleanup between tests is automatic.
+
+A first test:
+
+```jsx
+import { render, screen } from '@testing-library/react'
+import { expect, it } from 'vitest'
+import { Greeting } from './Greeting'
+
+it('greets the user by name', () => {
+  render(<Greeting name="Ada" />)
+
+  expect(screen.getByRole('heading', { name: 'Hello, Ada' })).toBeVisible()
+})
+```
+
+`screen` queries the whole document, which saves destructuring the return value
+of `render`.
+
+jest-dom is what makes the assertions readable, and its failure messages far more
+useful than a bare truthiness check:
+
+```js
+expect(element).toBeInTheDocument()
+expect(element).toBeVisible()
+expect(button).toBeDisabled()
+expect(input).toHaveValue('hello')
+expect(checkbox).toBeChecked()
+expect(element).toHaveTextContent('Saved')
+```
+
+</Level>
+
+<Level value="medium">
+
+**Use `user-event`, not `fireEvent`.** `fireEvent` dispatches a single DOM event;
+`user-event` simulates the whole interaction — focus, key events, input events —
+and refuses to act on hidden or disabled elements, exactly as a browser would.
+
+In v14 you call `setup()` first and `await` every interaction:
+
+```jsx
+import userEvent from '@testing-library/user-event'
+
+it('submits the form', async () => {
+  const user = userEvent.setup()
+  const onSubmit = vi.fn()
+
+  render(<LoginForm onSubmit={onSubmit} />)
+
+  await user.type(screen.getByLabelText('Email'), 'ada@example.com')
+  await user.click(screen.getByRole('button', { name: 'Log in' }))
+
+  expect(onSubmit).toHaveBeenCalledWith({ email: 'ada@example.com' })
+})
+```
+
+Forgetting `await` is the most common source of flaky Testing Library tests.
+
+**Async results use `findBy`**, which retries until the element appears or times
+out:
+
+```jsx
+it('shows todos once loaded', async () => {
+  render(<Todos />)
+
+  expect(screen.getByText('Loading…')).toBeInTheDocument()
+
+  // Waits for the element rather than guessing at a delay.
+  expect(await screen.findByRole('list')).toBeInTheDocument()
+})
+```
+
+**Asserting something is absent** requires `queryBy`, because `getBy` throws
+before your assertion runs:
+
+```jsx
+expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+```
+
+For something that disappears, wait for it explicitly:
+
+```jsx
+await waitForElementToBeRemoved(() => screen.queryByText('Loading…'))
+```
+
+**`within` scopes a query** to part of the tree, which matters when the same
+text appears more than once:
+
+```jsx
+const row = screen.getByRole('row', { name: /Ada/ })
+await user.click(within(row).getByRole('button', { name: 'Delete' }))
+```
+
+**When a query fails**, print the DOM rather than guessing:
+
+```jsx
+screen.debug()                       // whole document
+screen.debug(screen.getByRole('form')) // one element
+screen.logTestingPlaygroundURL()     // opens a query builder for the markup
+```
+
+</Level>
+
+<Level value="advanced">
+
+**Wrap providers in a custom render** so no test has to remember them. Re-export
+everything from the library so tests only import one module:
+
+```jsx
+// test-utils.jsx
+import { render } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+
+function AllProviders({ children }) {
+  // A fresh client per test — otherwise cache leaks between tests.
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>{children}</ThemeProvider>
+    </QueryClientProvider>
+  )
+}
+
+export * from '@testing-library/react'
+export function renderWithProviders(ui, options) {
+  return render(ui, { wrapper: AllProviders, ...options })
+}
+```
+
+Disabling retries matters: a query library retrying a deliberately failing
+request will hang your test until it times out.
+
+**Test hooks directly** with `renderHook` when the logic doesn't belong to one
+component:
+
+```jsx
+import { act, renderHook } from '@testing-library/react'
+
+it('increments', () => {
+  const { result } = renderHook(() => useCounter())
+
+  act(() => result.current.increment())
+
+  expect(result.current.count).toBe(1)
+})
+```
+
+`result.current` is re-read after each render, so never destructure it up front —
+you'd be holding a stale value.
+
+**About `act` warnings.** They mean state updated outside React's knowledge —
+almost always an async update finishing after the test moved on. The fix is
+usually to await the thing you were waiting for rather than to wrap more code in
+`act`:
+
+```jsx
+// Warns: the fetch resolves after the test body ends.
+render(<Profile />)
+expect(screen.getByText('Ada')).toBeInTheDocument()
+
+// Correct: wait for the update.
+render(<Profile />)
+expect(await screen.findByText('Ada')).toBeInTheDocument()
+```
+
+`user-event` and the `findBy` queries wrap `act` internally, which is another
+reason to prefer them.
+
+**Accessible names come from more than text.** `getByRole('button', { name })`
+matches the computed accessible name, so these all work:
+
+```jsx
+<button>Save</button>                             // name: "Save"
+<button aria-label="Close dialog">×</button>      // name: "Close dialog"
+<button><VisuallyHidden>Delete</VisuallyHidden><TrashIcon /></button>
+```
+
+If a role query can't find your element, `screen.getByRole('button')` with no
+name will list every button and its computed name in the failure output.
+
+**What not to test.** Skip assertions on internal state, prop values, or which
+child component rendered — those are implementation, and testing them makes
+refactoring expensive without catching real bugs. Assert on what the user would
+see and what your code calls outward, such as a submit handler receiving the
+right payload.
+
+</Level>
+
+</DifficultyTabs>
