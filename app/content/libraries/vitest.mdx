@@ -1,0 +1,345 @@
+---
+title: Vitest
+category: testing
+tags:
+  - testing
+  - unit-tests
+  - vite
+  - mocking
+tldr: >-
+  A test runner built on Vite. It reuses your existing Vite config, so aliases,
+  plugins, and transforms already work with no separate build pipeline. The API
+  is close enough to Jest that most tests port with only import changes.
+whenToUse: >-
+  On any project already using Vite — which is most new frontend work. Sharing
+  one config means TypeScript, JSX, path aliases, and env handling behave
+  identically in tests and in the app, which removes an entire category of
+  "works in the app, fails in tests" problems.
+whenNotTo: >-
+  On a webpack or Next.js codebase where Jest is already configured and working
+  — the migration effort buys little. Also not the right tool for full
+  end-to-end browser testing; its browser mode targets component-level tests,
+  not multi-page user journeys.
+alternatives:
+  - slug: jest
+    reason: >-
+      The long-standing default, with the largest ecosystem and the most
+      Stack Overflow answers. On a Vite project it means maintaining a second
+      transform pipeline that has to be kept in sync with your build — which is
+      the specific pain Vitest removes.
+  - slug: node-test-runner
+    reason: >-
+      Built into Node, so zero dependencies. Fine for testing plain Node code,
+      but it has no transform pipeline of its own — you'd be wiring up
+      TypeScript and JSX handling yourself, which is exactly what Vitest
+      inherits from Vite for free.
+  - slug: playwright
+    reason: >-
+      A different layer rather than a competitor: real browsers, full user
+      journeys, across Chromium, Firefox, and WebKit. Most projects want both —
+      Vitest for units and components, Playwright for end-to-end.
+docsUrl: https://vitest.dev/
+popularity: high
+status: published
+verified: false
+lastReviewed: "2026-08-15"
+---
+
+## Introduction
+
+Vitest is a test runner powered by Vite. Current major version: **v4** (4.1.x at
+the time of writing); a v5 is in beta.
+
+The central idea is that your tests go through the same pipeline as your
+application. Vite already knows how to resolve your path aliases, compile your
+TypeScript and JSX, apply your plugins, and load your env files — so Vitest
+reuses that rather than asking you to describe it a second time.
+
+Anyone who has maintained a `jest.config.js` full of `moduleNameMapper` entries
+mirroring their bundler's aliases will recognise what that saves. There is one
+config, and it can't drift.
+
+The API is deliberately Jest-compatible: `describe`, `it`, `expect`, `vi`
+instead of `jest`. Most suites port by changing imports.
+
+## What changed in v4
+
+If you're following a v3-era tutorial, these will bite:
+
+- **`vi.restoreAllMocks()` only restores spies created with `vi.spyOn`.** It no
+  longer resets `vi.fn()` mocks or anything from `vi.mock`. If you relied on it
+  as a blanket cleanup, use `vi.resetAllMocks()` or `clearMocks` in config
+  instead.
+- **`workspace` became `projects`**, configured inline rather than in a separate
+  workspace file.
+- **Browser mode providers are separate packages now** — install
+  `@vitest/browser-playwright` (or webdriverio/preview) and pass the provider as
+  a function. The context import moved from `@vitest/browser/context` to
+  `vitest/browser`.
+- **Several coverage options were removed**, including `coverage.all` and
+  `coverage.ignoreEmptyLines`. Specify `coverage.include` explicitly instead.
+
+<DifficultyTabs>
+
+<Level value="easy">
+
+```bash
+npm install -D vitest
+```
+
+```json
+{
+  "scripts": {
+    "test": "vitest",
+    "test:run": "vitest run"
+  }
+}
+```
+
+`vitest` starts in watch mode; `vitest run` executes once and exits, which is
+what you want in CI.
+
+A test file needs no configuration to start:
+
+```js
+// sum.test.js
+import { describe, expect, it } from 'vitest'
+import { sum } from './sum'
+
+describe('sum', () => {
+  it('adds two numbers', () => {
+    expect(sum(1, 2)).toBe(3)
+  })
+
+  it('handles negatives', () => {
+    expect(sum(-1, -2)).toBe(-3)
+  })
+})
+```
+
+By default Vitest picks up files matching `*.test.*` and `*.spec.*`.
+
+Common assertions:
+
+```js
+expect(value).toBe(3)                    // Object.is
+expect(object).toEqual({ a: 1 })         // deep equality
+expect(array).toContain('x')
+expect(fn).toThrow('boom')
+expect(value).toBeNull()
+await expect(promise).resolves.toBe(1)
+await expect(promise).rejects.toThrow()
+```
+
+If you'd rather not import `describe` and `it` in every file, enable globals:
+
+```js
+// vite.config.js
+import { defineConfig } from 'vitest/config'
+
+export default defineConfig({
+  test: { globals: true },
+})
+```
+
+</Level>
+
+<Level value="medium">
+
+**Testing DOM code needs an environment**, since Node has no `document`:
+
+```bash
+npm install -D jsdom
+```
+
+```js
+import { defineConfig } from 'vitest/config'
+
+export default defineConfig({
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./vitest.setup.ts'],
+    globals: true,
+  },
+})
+```
+
+`happy-dom` is the faster alternative; `jsdom` is the more complete one. Start
+with jsdom and switch only if test time becomes a problem.
+
+You can also set the environment per file, which avoids paying for jsdom in
+pure-logic tests:
+
+```js
+// @vitest-environment jsdom
+```
+
+**Mock functions** with `vi`:
+
+```js
+import { expect, it, vi } from 'vitest'
+
+const callback = vi.fn()
+callback('a')
+
+expect(callback).toHaveBeenCalledWith('a')
+expect(callback).toHaveBeenCalledTimes(1)
+
+// Control the return value
+const getUser = vi.fn().mockResolvedValue({ name: 'Ada' })
+```
+
+**Spy on real methods** when you want to observe or override one function while
+keeping the rest of a module intact:
+
+```js
+const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+// ...
+spy.mockRestore()
+```
+
+**Mock a whole module** — note that `vi.mock` is hoisted above imports, so it
+can't reference outer variables unless you use `vi.hoisted`:
+
+```js
+vi.mock('./api', () => ({
+  fetchUser: vi.fn().mockResolvedValue({ name: 'Ada' }),
+}))
+```
+
+**Reset state between tests** rather than remembering to clean up by hand:
+
+```js
+export default defineConfig({
+  test: { clearMocks: true, restoreMocks: true },
+})
+```
+
+**Fake timers** for anything time-dependent, so tests don't actually wait:
+
+```js
+vi.useFakeTimers()
+doSomethingDebounced()
+vi.advanceTimersByTime(500)
+expect(result).toBe('done')
+vi.useRealTimers()
+```
+
+**Coverage** needs its provider installed, and in v4 an explicit include:
+
+```bash
+npm install -D @vitest/coverage-v8
+```
+
+```js
+test: {
+  coverage: {
+    provider: 'v8',
+    include: ['src/**/*.{ts,tsx}'],
+    reporter: ['text', 'html'],
+  },
+}
+```
+
+</Level>
+
+<Level value="advanced">
+
+**Multiple projects in one run** — the v4 replacement for workspaces. Useful for
+splitting fast unit tests from slower DOM tests, or covering a monorepo:
+
+```js
+export default defineConfig({
+  test: {
+    projects: [
+      {
+        test: { name: 'unit', environment: 'node', include: ['src/**/*.test.ts'] },
+      },
+      {
+        test: { name: 'dom', environment: 'jsdom', include: ['src/**/*.test.tsx'] },
+      },
+    ],
+  },
+})
+```
+
+Each project gets its own environment and setup, and `vitest --project unit`
+runs just one.
+
+**Browser mode** runs component tests in a real browser instead of a DOM
+simulation — real layout, real event dispatch, real CSS. In v4 the provider is a
+separate package passed as a function:
+
+```bash
+npm install -D @vitest/browser-playwright playwright
+```
+
+```js
+import { playwright } from '@vitest/browser-playwright'
+
+export default defineConfig({
+  test: {
+    browser: {
+      enabled: true,
+      provider: playwright(),
+      instances: [{ browser: 'chromium' }],
+    },
+  },
+})
+```
+
+```js
+import { page } from 'vitest/browser' // moved from @vitest/browser/context
+```
+
+Worth it when you're testing things jsdom models poorly — focus behaviour,
+scroll, or anything depending on real geometry.
+
+**Type-level tests** catch regressions in your public types, which runtime tests
+can't see:
+
+```ts
+import { assertType, expectTypeOf, test } from 'vitest'
+
+test('parse returns a User', () => {
+  expectTypeOf(parse('{}')).toEqualTypeOf<User>()
+  assertType<string>(format(new Date()))
+})
+```
+
+Run them with `vitest --typecheck`.
+
+**Deterministic ordering and isolation.** Tests run in parallel across files by
+default, each file isolated. Two knobs matter when that bites:
+
+```js
+test: {
+  // Tests in one file that share module state and must not interleave.
+  sequence: { concurrent: false },
+  // Faster, but files share a process — only if nothing leaks global state.
+  isolate: false,
+}
+```
+
+Turning off isolation is a real speed win and a real source of mysterious
+cross-file failures. Measure before reaching for it.
+
+**In-source tests** keep small unit tests beside the code, stripped from
+production builds by `define`:
+
+```ts
+export function sum(a: number, b: number) {
+  return a + b
+}
+
+if (import.meta.vitest) {
+  const { expect, it } = import.meta.vitest
+  it('sums', () => expect(sum(1, 2)).toBe(3))
+}
+```
+
+Handy for internal helpers you don't want to export purely for testing.
+
+</Level>
+
+</DifficultyTabs>
