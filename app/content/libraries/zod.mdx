@@ -1,0 +1,333 @@
+---
+title: Zod
+category: forms
+tags:
+  - validation
+  - typescript
+  - schema
+  - forms
+tldr: >-
+  TypeScript-first schema validation. You declare a schema once, validate
+  unknown data against it at runtime, and infer the static type from it — so the
+  type and the check can never drift apart.
+whenToUse: >-
+  At every boundary where data enters your program and TypeScript's guarantees
+  stop being true: API responses, form input, URL params, environment variables,
+  webhook payloads. Anywhere you'd otherwise write an interface and simply hope
+  the incoming shape matches it.
+whenNotTo: >-
+  For data you already control end-to-end, where a plain type is enough and a
+  runtime check is just overhead. Be deliberate about bundle size too — the full
+  library isn't small, and validating a single field in a client bundle may not
+  justify it when a handwritten check would do.
+alternatives:
+  - slug: valibot
+    reason: >-
+      Choose it when bundle size dominates. Its modular, function-per-validator
+      design tree-shakes down to a fraction of Zod's footprint — the same
+      motivation behind zod/mini, but it's the whole architecture rather than an
+      alternative entry point.
+  - slug: yup
+    reason: >-
+      The older default, still common in existing codebases. Its type inference
+      is noticeably weaker than Zod's, which is the main reason new projects
+      moved away — little reason to choose it fresh today.
+  - slug: arktype
+    reason: >-
+      Choose it if you'd rather write schemas that look like TypeScript type
+      syntax, with very fast inference. It's the more novel approach; Zod has
+      the far larger ecosystem of integrations.
+docsUrl: https://zod.dev/
+popularity: high
+status: published
+verified: false
+lastReviewed: "2026-08-15"
+---
+
+## Introduction
+
+Zod is a schema validation library built for TypeScript. Current major version:
+**v4** (4.4.x at the time of writing).
+
+The core idea is that the schema is the single source of truth. You write it
+once, and both the runtime check and the static type come from it:
+
+```ts
+import * as z from 'zod'
+
+const User = z.object({
+  name: z.string(),
+  email: z.email(),
+  age: z.number().min(18),
+})
+
+type User = z.infer<typeof User>
+// { name: string; email: string; age: number }
+```
+
+This matters because TypeScript's guarantees end at the edge of your program. A
+`fetch` response typed as `User` is a claim, not a check — the compiler has no
+idea what the server actually sent. Zod turns that claim into a verification,
+and because the type is derived from the schema, they cannot fall out of sync.
+
+Both `import * as z from 'zod'` and `import { z } from 'zod'` work; the docs use
+the namespace form.
+
+## What changed in v4
+
+Most tutorials you'll find were written for v3, and several core APIs moved.
+The important ones:
+
+- **String formats are top-level.** `z.email()`, `z.uuid()`, `z.url()` instead
+  of `z.string().email()`. The old methods still exist and still work — they're
+  deprecated, not deleted — but the top-level versions are what allow the
+  library to tree-shake.
+- **One `error` parameter.** `message`, `required_error`, `invalid_type_error`,
+  and `errorMap` are all replaced by `error`.
+- **Error helpers became top-level functions.** `error.format()` and
+  `error.flatten()` give way to `z.treeifyError()`, `z.flattenError()`, and the
+  very useful `z.prettifyError()`.
+- **`.errors` is gone** — the issue list is `error.issues`.
+- **`z.record()` wants both key and value schemas.** This is enforced by the
+  types rather than at runtime, so a v3 call may keep working while failing to
+  type-check.
+- **`.default()` now applies after parsing** and must match the output type.
+  Use `.prefault()` for the old pre-parse behaviour.
+
+If you're migrating gradually, `zod/v3` is still published as a subpath, so both
+versions can coexist in one project while you work through it.
+
+## Bundle size
+
+Zod's footprint is a fair criticism, and v4 addresses it from two directions.
+Moving string formats to top-level functions made the library genuinely
+tree-shakeable. Beyond that, **`zod/mini`** exposes the same validators through a
+functional API that ships dramatically less code, at the cost of the fluent
+method chaining most people like. Use the standard import unless you've measured
+a problem.
+
+<DifficultyTabs>
+
+<Level value="easy">
+
+```bash
+npm install zod
+```
+
+Define a schema and validate against it. `parse` returns typed data or throws:
+
+```ts
+import * as z from 'zod'
+
+const User = z.object({
+  name: z.string(),
+  email: z.email(),
+})
+
+const user = User.parse({ name: 'Ada', email: 'ada@example.com' })
+// user is typed { name: string; email: string }
+```
+
+`safeParse` returns a result object instead of throwing, which is usually what
+you want at a boundary:
+
+```ts
+const result = User.safeParse(unknownInput)
+
+if (result.success) {
+  console.log(result.data.name)
+} else {
+  console.log(result.error.issues)
+}
+```
+
+Derive the type rather than writing it twice:
+
+```ts
+type User = z.infer<typeof User>
+```
+
+Common building blocks:
+
+```ts
+z.string().min(1).max(100)
+z.number().int().positive()
+z.boolean()
+z.array(z.string())
+z.enum(['draft', 'published'])
+z.string().optional()          // string | undefined
+z.string().nullable()          // string | null
+z.string().default('untitled') // fills in when undefined
+```
+
+</Level>
+
+<Level value="medium">
+
+**Compose schemas instead of repeating them.** Object schemas support the same
+operations as TypeScript's utility types:
+
+```ts
+const User = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  email: z.email(),
+})
+
+const CreateUser = User.omit({ id: true })
+const UpdateUser = User.partial()
+const UserPreview = User.pick({ id: true, name: true })
+const Admin = User.extend({ role: z.literal('admin') })
+```
+
+**Discriminated unions** parse efficiently and narrow properly, because Zod
+checks the discriminator first rather than trying every branch:
+
+```ts
+const Event = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('click'), x: z.number(), y: z.number() }),
+  z.object({ type: z.literal('keypress'), key: z.string() }),
+])
+```
+
+**Coercion** is for data that arrives as strings — query params, form fields,
+environment variables:
+
+```ts
+const Query = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  archived: z.coerce.boolean().default(false),
+})
+
+Query.parse({ page: '3' }) // { page: 3, archived: false }
+```
+
+**Custom messages** use the unified `error` parameter:
+
+```ts
+const Password = z
+  .string({ error: 'Password is required' })
+  .min(8, { error: 'Use at least 8 characters' })
+```
+
+**Cross-field rules** go on the object, not the field, via `.refine`:
+
+```ts
+const SignUp = z
+  .object({
+    password: z.string().min(8),
+    confirm: z.string(),
+  })
+  .refine((data) => data.password === data.confirm, {
+    error: 'Passwords must match',
+    path: ['confirm'], // attach the error to this field
+  })
+```
+
+Setting `path` is what makes the message appear next to the right input in a
+form.
+
+**Readable errors for humans** — `z.prettifyError` is the fastest way to see
+what failed:
+
+```ts
+const result = User.safeParse(input)
+if (!result.success) {
+  console.log(z.prettifyError(result.error))
+}
+```
+
+For structured handling, `z.flattenError` gives you field-keyed messages and
+`z.treeifyError` mirrors the shape of nested objects.
+
+</Level>
+
+<Level value="advanced">
+
+**Transforms change the output type**, so input and output diverge — and that
+distinction has its own inference helpers:
+
+```ts
+const DateFromString = z.string().transform((value) => new Date(value))
+
+type In = z.input<typeof DateFromString>   // string
+type Out = z.output<typeof DateFromString> // Date
+```
+
+`z.infer` is an alias for `z.output`. When a schema feeds a form library, the
+input type is what the form holds and the output type is what your handler
+receives — mixing them up is a common source of confusing type errors.
+
+**Validate environment variables at startup**, so a misconfigured deploy fails
+immediately and loudly rather than at 3am in a code path nobody exercised:
+
+```ts
+const Env = z.object({
+  NODE_ENV: z.enum(['development', 'production', 'test']),
+  DATABASE_URL: z.url(),
+  PORT: z.coerce.number().default(3000),
+})
+
+export const env = Env.parse(process.env)
+```
+
+**Recursive schemas use getters**, which is how a self-reference type-checks
+without an explicit annotation:
+
+```ts
+const Category = z.object({
+  name: z.string(),
+  get children() {
+    return z.array(Category)
+  },
+})
+```
+
+**Branded types** make a validated value structurally distinct, so an unchecked
+string can't be passed where a verified one is required:
+
+```ts
+const Email = z.email().brand<'Email'>()
+type Email = z.infer<typeof Email>
+
+function sendTo(address: Email) { /* ... */ }
+
+sendTo('nope')                       // type error
+sendTo(Email.parse('a@example.com')) // fine
+```
+
+**`.superRefine` for multiple or conditional issues**, where `.refine` only lets
+you report one:
+
+```ts
+const Booking = z.object({ start: z.date(), end: z.date() })
+  .superRefine((value, ctx) => {
+    if (value.end <= value.start) {
+      ctx.addIssue({ code: 'custom', message: 'End must be after start', path: ['end'] })
+    }
+  })
+```
+
+**Watch `.default()` in v4.** It now short-circuits with a value matching the
+*output* type, applied after parsing. If you were relying on a default being fed
+through the parser — a string default on a coerced number, say — that's
+`.prefault()` now:
+
+```ts
+z.coerce.number().default(1)   // default is the number 1, unparsed
+z.coerce.number().prefault('1') // '1' goes through coercion first
+```
+
+**Pairing with a form library.** Zod implements Standard Schema, so most modern
+form libraries accept a schema directly. With React Hook Form it's one resolver,
+and the same import covers both Zod 3 and Zod 4:
+
+```ts
+import { zodResolver } from '@hookform/resolvers/zod'
+
+useForm({ resolver: zodResolver(SignUp) })
+```
+
+</Level>
+
+</DifficultyTabs>
