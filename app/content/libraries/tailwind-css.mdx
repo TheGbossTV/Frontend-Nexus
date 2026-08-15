@@ -1,0 +1,301 @@
+---
+title: Tailwind CSS
+category: styling
+tags:
+  - css
+  - styling
+  - utility-first
+  - design-system
+tldr: >-
+  Utility-first CSS. You compose small single-purpose classes directly in markup
+  instead of writing rules in a separate file. As of v4 it's configured in CSS
+  rather than JavaScript, and the compiler is Rust-based and fast enough to be
+  invisible.
+whenToUse: >-
+  When you want a design system with real constraints — a fixed spacing scale,
+  a fixed palette — enforced by the tools rather than by review. It pays off
+  most on component-based codebases, where markup and styles already live
+  together, and on teams that keep inventing slightly different shades of grey.
+whenNotTo: >-
+  When you need styles to travel outside your markup — emailable HTML, CMS-authored
+  content, or a design handoff where non-developers edit CSS. Also skip it if
+  your team genuinely can't live with the verbose markup, because that objection
+  doesn't go away with familiarity, and a fought-over tool is worse than a plain
+  stylesheet.
+alternatives:
+  - slug: css-modules
+    reason: >-
+      Choose it when you'd rather write real CSS and just want the class names
+      scoped. It solves only the naming-collision problem and leaves everything
+      else to you — no design constraints, no utilities, and no new syntax to
+      learn.
+  - slug: styled-components
+    reason: >-
+      Choose it when styles need to react to runtime props or theme values in
+      JavaScript. Tailwind's classes are static strings resolved at build time,
+      which is why it's fast, and also why genuinely dynamic styling is awkward.
+  - slug: emotion
+    reason: >-
+      Similar trade to Styled Components — runtime CSS-in-JS with the same
+      dynamic-styling strengths, plus a css prop that composes more freely. Pick
+      it over Tailwind when your styles are computed, not composed.
+docsUrl: https://tailwindcss.com/
+popularity: high
+status: published
+verified: false
+lastReviewed: "2026-08-15"
+---
+
+## Introduction
+
+Tailwind CSS is a utility-first framework: rather than writing `.card` and then
+defining what a card looks like, you compose the appearance from many small
+classes in the markup itself. Current major version: **v4** (4.3.x at the time
+of writing). v3 is still maintained on an LTS tag (3.4.x) if you're not ready to
+migrate.
+
+```html
+<div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+```
+
+The objection is obvious and worth stating plainly: that markup is noisy. What
+you get in exchange is that the styles are *co-located and local*. There is no
+separate file to open, no class name to invent, no worry that editing `.card`
+breaks a page you've never seen, and no stylesheet that only ever grows. On a
+component-based codebase, where you already extract a `Card` component the
+moment the markup repeats, the duplication argument mostly dissolves.
+
+The values aren't arbitrary either. `p-6` is a step on a spacing scale and
+`slate-200` is a step on a palette — the utilities are a design system with
+constraints baked in, which is the real reason teams adopt it.
+
+## v4 changed how you configure it
+
+This is the biggest thing to know if you're coming from v3 or following an older
+tutorial. **There is no `tailwind.config.js` by default.** Configuration moved
+into CSS:
+
+```css
+@import "tailwindcss";
+
+@theme {
+  --color-brand: oklch(0.72 0.19 250);
+  --font-display: "Satoshi", sans-serif;
+  --breakpoint-3xl: 120rem;
+}
+```
+
+Every variable declared in `@theme` becomes both a CSS custom property *and* a
+set of utilities — `--color-brand` gives you `bg-brand`, `text-brand`,
+`border-brand`, and so on. It's one declaration instead of a config entry plus a
+variable.
+
+Two other v3 habits that no longer apply:
+
+- **No `content` array.** Source files are detected automatically; use `@source`
+  only for paths it can't find, such as a library in `node_modules`.
+- **No `darkMode: 'class'` key.** That option doesn't exist — class-based dark
+  mode is declared with `@custom-variant`, shown in the Medium tab.
+
+If you have a large v3 config, `@config "../../tailwind.config.js"` still loads
+it, so migration can be incremental.
+
+<DifficultyTabs>
+
+<Level value="easy">
+
+With Vite, it's a plugin and one import:
+
+```bash
+npm install tailwindcss @tailwindcss/vite
+```
+
+```js
+// vite.config.ts
+import tailwindcss from '@tailwindcss/vite'
+import { defineConfig } from 'vite'
+
+export default defineConfig({
+  plugins: [tailwindcss()],
+})
+```
+
+```css
+/* app.css */
+@import "tailwindcss";
+```
+
+That's the whole setup. Now compose utilities in markup:
+
+```html
+<button class="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white">
+  Save
+</button>
+```
+
+Variants prefix a utility to apply it conditionally — state, breakpoint, or
+media query:
+
+```html
+<button class="bg-blue-600 hover:bg-blue-700 focus:outline-2 disabled:opacity-50">
+  Save
+</button>
+
+<!-- Mobile-first: base applies everywhere, md: applies at 768px and up -->
+<div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+```
+
+Reach for an arbitrary value in square brackets when the scale genuinely doesn't
+have what you need — sparingly, since every one is a small hole in the system:
+
+```html
+<div class="top-[117px] bg-[#bada55]">
+```
+
+</Level>
+
+<Level value="medium">
+
+**Define your design tokens once.** Anything in `@theme` generates utilities:
+
+```css
+@import "tailwindcss";
+
+@theme {
+  --color-brand-500: oklch(0.72 0.19 250);
+  --color-brand-600: oklch(0.62 0.19 250);
+  --radius-card: 0.75rem;
+  --ease-snappy: cubic-bezier(0.2, 0, 0, 1);
+}
+```
+
+```html
+<div class="rounded-card bg-brand-500 ease-snappy">
+```
+
+**Class-based dark mode** is a custom variant, not a config flag. This is the
+single most common v4 migration snag:
+
+```css
+@custom-variant dark (&:where(.dark, .dark *));
+```
+
+Then `dark:` works as it always has, driven by a `.dark` class on `<html>` that
+you toggle yourself. Without this, `dark:` follows the OS setting via
+`prefers-color-scheme` and ignores any toggle you build.
+
+**Semantic tokens beat raw colours.** Point theme variables at CSS custom
+properties you redefine per theme, and components stop caring which mode is
+active:
+
+```css
+@theme inline {
+  --color-surface: var(--surface);
+}
+
+:root { --surface: #ffffff; }
+.dark { --surface: #131926; }
+```
+
+Now `bg-surface` is correct in both themes with no `dark:` variant at the call
+site.
+
+**Custom utilities** go through `@utility`, which makes them work with variants
+— a plain CSS class wouldn't support `hover:` or `lg:`:
+
+```css
+@utility tab-4 {
+  tab-size: 4;
+}
+```
+
+**`@apply` exists, but use it sparingly.** It's the right tool for styling markup
+you don't control — third-party widgets, or MDX output:
+
+```css
+.prose :where(h2) {
+  @apply mt-10 text-2xl font-semibold;
+}
+```
+
+Using it to build `.btn`, `.card`, and friends recreates exactly the
+naming-and-abstraction problem Tailwind exists to avoid. Extract a component
+instead.
+
+</Level>
+
+<Level value="advanced">
+
+**Scoped `@apply` in component styles.** Single-file component styles and
+CSS-in-JS blocks don't automatically know your theme. `@reference` imports it for
+resolution *without* duplicating the compiled output into every component:
+
+```vue
+<style>
+  @reference "../../app.css";
+
+  h1 {
+    @apply text-2xl font-bold text-red-500;
+  }
+</style>
+```
+
+Importing the stylesheet normally instead would inline your whole theme into
+every component's styles.
+
+**Theme-aware colour maths.** `--alpha()` and `--spacing()` let custom CSS stay
+on the design system instead of hardcoding values:
+
+```css
+.overlay {
+  background: --alpha(var(--color-slate-900) / 60%);
+  padding: --spacing(4);
+}
+```
+
+`--alpha()` compiles to `color-mix(in oklab, …)`, so it works with any colour
+space rather than assuming hex.
+
+**Variants inside CSS.** `@variant` applies a Tailwind variant to hand-written
+rules, which is useful for the small amount of CSS that can't live in markup:
+
+```css
+.my-element {
+  background: white;
+
+  @variant dark {
+    background: black;
+  }
+}
+```
+
+**Content detection has edges.** Tailwind scans source files for class names as
+plain strings, so any class assembled at runtime is invisible to it:
+
+```jsx
+// Broken — "text-red-500" never appears literally in the source.
+<p className={`text-${color}-500`} />
+
+// Works — the full class names are present for the scanner to find.
+const TONE = { error: 'text-red-500', ok: 'text-green-500' }
+<p className={TONE[tone]} />
+```
+
+This is the most common "why is my style missing in production" bug. Write
+complete class names and choose between them; never interpolate fragments.
+
+**Bringing a v3 setup forward.** CSS-defined values merge with, and take
+precedence over, anything from a legacy config, so you can migrate piecemeal:
+
+```css
+@import "tailwindcss";
+@config "../../tailwind.config.js";
+@plugin "@tailwindcss/typography";
+```
+
+Move theme values into `@theme` a group at a time and delete the config when
+it's empty.
+
+</Level>
+
+</DifficultyTabs>
