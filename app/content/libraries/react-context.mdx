@@ -1,0 +1,283 @@
+---
+title: React Context
+category: state-management
+tags:
+  - state
+  - react
+  - context
+  - built-in
+tldr: >-
+  The built-in baseline. Context distributes a value down the tree without prop
+  drilling — it is not itself a state manager, and it has no way to subscribe to
+  part of a value, so every consumer re-renders whenever that value changes.
+whenToUse: >-
+  Reach for it first, always. It's enough for values that are read widely but
+  change rarely — theme, locale, the current user, a configured client object —
+  and for scoping a value to a subtree rather than the whole app. If your
+  context value changes on the order of user sessions rather than keystrokes,
+  you probably never need a library.
+whenNotTo: >-
+  When the value changes often and is consumed widely, because every consumer
+  re-renders on every change and there is no selector to narrow that down —
+  `memo` doesn't help, since context bypasses it. Also skip it when you'd be
+  creating many contexts purely to work around that, or when you need to read
+  and write state from outside React.
+alternatives:
+  - slug: zustand
+    reason: >-
+      The usual next step when Context re-renders start hurting. Selectors mean
+      a component only re-renders for the slice it reads, and the store lives
+      outside React so you can read and write it from anywhere — neither of
+      which Context can do.
+  - slug: jotai
+    reason: >-
+      Closest in spirit to Context — atoms feel like many small contexts, and
+      like Context they can be scoped by a Provider. The difference is that
+      reading an atom subscribes you to only that atom, which is precisely the
+      granularity Context lacks.
+  - slug: redux-toolkit
+    reason: >-
+      Choose it when the problem isn't re-renders but structure — you want an
+      auditable action log, enforced update patterns, and time-travel debugging.
+      That's a different reason to leave Context than performance.
+docsUrl: https://react.dev/reference/react/createContext
+popularity: high
+status: published
+verified: false
+lastReviewed: "2026-08-15"
+---
+
+## Introduction
+
+Context is part of React itself — no install, no dependency. These examples
+target **React 19** (19.2.x at the time of writing).
+
+The most useful thing to understand first: **Context is not a state manager.**
+It holds no state of its own. It is a transport mechanism — a way to make a
+value available to a subtree without threading it through every intermediate
+component as props. The state itself still comes from `useState` or
+`useReducer`; Context just distributes it.
+
+That distinction explains most of the confusion around it. "Should I use Context
+or Zustand?" is a slightly wrong question: Context is how a value gets *down the
+tree*, and a state library is how a value is *stored and subscribed to*. They
+overlap only because Context is often the simplest thing that works.
+
+In React 19 the context object is itself the provider:
+
+```jsx
+<ThemeContext value={theme}>
+  <Page />
+</ThemeContext>
+```
+
+`<ThemeContext.Provider>` still works and is what you'll see in older code, but
+it's now the legacy form.
+
+## The one real limitation
+
+When a provider's `value` changes, **every component reading that context
+re-renders** — all of them, regardless of which part of the value they actually
+use. Values are compared with `Object.is`, and wrapping a consumer in `memo`
+does not save it, because context deliberately bypasses memoisation.
+
+There is no selector API. You cannot say "re-render me only when
+`value.user.name` changes." That single missing capability is the reason state
+libraries exist, and it's the honest dividing line for when to leave Context
+behind.
+
+Two consequences follow, and both are avoidable:
+
+1. An inline object as the value (`value={{ user, login }}`) creates a new
+   reference on every render of the provider, so every consumer re-renders every
+   time — even when nothing meaningful changed. Memoise it.
+2. Bundling unrelated state into one context couples their update rates. A
+   context holding both `theme` and `mousePosition` re-renders the theme
+   consumers on every mouse move.
+
+<DifficultyTabs>
+
+<Level value="easy">
+
+Create the context outside any component. The argument is the **default value**,
+used only when a component reads the context with no provider above it:
+
+```jsx
+import { createContext, useContext } from 'react'
+
+const ThemeContext = createContext('light')
+```
+
+Provide a value to a subtree, and read it anywhere inside:
+
+```jsx
+function App() {
+  return (
+    <ThemeContext value="dark">
+      <Toolbar />
+    </ThemeContext>
+  )
+}
+
+function Button() {
+  const theme = useContext(ThemeContext)
+  return <button className={theme}>Click me</button>
+}
+```
+
+`Button` can be nested arbitrarily deep — nothing in between needs to know the
+theme exists. That's the whole point.
+
+To make it stateful, pair it with `useState` in the provider component:
+
+```jsx
+function App() {
+  const [theme, setTheme] = useState('light')
+
+  return (
+    <ThemeContext value={theme}>
+      <Toolbar />
+      <button onClick={() => setTheme('dark')}>Go dark</button>
+    </ThemeContext>
+  )
+}
+```
+
+</Level>
+
+<Level value="medium">
+
+**Wrap it in a custom hook.** This hides the context object, gives you one place
+to add logic, and turns "no provider" from a silent bug into a loud one:
+
+```jsx
+const ThemeContext = createContext(null)
+
+export function useTheme() {
+  const context = useContext(ThemeContext)
+  if (context === null) {
+    throw new Error('useTheme must be used inside <ThemeProvider>')
+  }
+  return context
+}
+```
+
+Using `null` as the default and throwing is usually better than a plausible
+fallback, which would let a missing provider fail quietly and confusingly.
+
+**Memoise the value when it's an object.** Without this, every render of the
+provider hands consumers a fresh reference and re-renders all of them:
+
+```jsx
+import { useCallback, useMemo, useState } from 'react'
+
+function AuthProvider({ children }) {
+  const [currentUser, setCurrentUser] = useState(null)
+
+  const login = useCallback((response) => {
+    setCurrentUser(response.user)
+  }, [])
+
+  const value = useMemo(
+    () => ({ currentUser, login }),
+    [currentUser, login],
+  )
+
+  return <AuthContext value={value}>{children}</AuthContext>
+}
+```
+
+Now consumers only re-render when `currentUser` actually changes, not whenever
+`AuthProvider` happens to render.
+
+**Split state from dispatch.** With `useReducer`, the dispatch function is
+stable for the lifetime of the component, so putting it in its own context means
+components that only *write* never re-render when the state changes:
+
+```jsx
+const TodosContext = createContext(null)
+const TodosDispatchContext = createContext(null)
+
+function TodosProvider({ children }) {
+  const [todos, dispatch] = useReducer(todosReducer, [])
+
+  return (
+    <TodosContext value={todos}>
+      <TodosDispatchContext value={dispatch}>{children}</TodosDispatchContext>
+    </TodosContext>
+  )
+}
+```
+
+An "Add todo" button reads only `TodosDispatchContext` and never re-renders as
+the list grows. This is the single highest-value Context pattern.
+
+</Level>
+
+<Level value="advanced">
+
+**Split contexts by update frequency, not by domain.** Since there's no
+selector, the granularity of your contexts *is* your re-render granularity. If
+one value changes per session and another changes per keystroke, they belong in
+different contexts even if they feel like one feature:
+
+```jsx
+// Changes rarely — safe for the whole app to consume.
+const SessionContext = createContext(null)
+
+// Changes constantly — keep its consumers few and shallow.
+const DraftContext = createContext(null)
+```
+
+This is the technique that keeps Context viable longer than people expect. It's
+also the point of diminishing returns: once you're maintaining several contexts
+purely to control re-renders, you're hand-rolling what a library gives you for
+free, and it's time to switch.
+
+**`use` can read context conditionally.** Unlike `useContext`, it isn't bound by
+the rules of hooks, so it may be called inside branches and loops:
+
+```jsx
+import { use } from 'react'
+
+function HorizontalRule({ show }) {
+  if (show) {
+    const theme = use(ThemeContext)
+    return <hr className={theme} />
+  }
+  return null
+}
+```
+
+Like `useContext`, it finds the closest provider *above* the calling component —
+a component cannot read a context it provides itself.
+
+**Scope a value per subtree, not per app.** Nesting providers overrides the value
+for that branch, which is genuinely hard to do with a module-level store and is
+Context's real structural advantage:
+
+```jsx
+<ThemeContext value="dark">
+  <Sidebar />
+  <ThemeContext value="light">
+    <Modal /> {/* reads "light" */}
+  </ThemeContext>
+</ThemeContext>
+```
+
+The same trick handles per-request state on the server: create the value inside
+the request-scoped component rather than at module level, and two concurrent
+requests can never see each other's data.
+
+**When to graduate.** Concretely, leave Context when you hit any of these:
+
+- Consumers re-render measurably too often and splitting contexts hasn't fixed it
+- You want to read or write the value from outside React
+- You need the value to survive unmounting the provider
+- You're writing your own subscription layer on top of it
+
+Short of those, the built-in is genuinely enough, and it's one fewer dependency.
+
+</Level>
+
+</DifficultyTabs>
