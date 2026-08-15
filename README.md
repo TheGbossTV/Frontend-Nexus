@@ -254,6 +254,12 @@ Built in phases; each one is verified before the next starts.
 - [x] **Phase 3** — Shiki syntax highlighting + IDE-window code blocks
 - [x] **Phase 4** — `<DifficultyTabs>` + sticky in-page TOC
 - [x] **Phase 5** — Client-side search over a build-time index
-- [ ] **Phase 6** — Content generation pass
+- [x] **Phase 6** — Content generation pass (16 entries, awaiting review)
+
+## Review queue
+
+Every entry currently carries `verified: false`. Flip it to `true` yourself once
+you've read the entry through — that flag is the whole point of the field, and
+nothing automated should ever set it.
 
 Deferred on purpose: SEO/meta/sitemap, auth, comments, custom domain.

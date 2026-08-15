@@ -1,0 +1,314 @@
+---
+title: Vite
+category: build-tools
+tags:
+  - build-tools
+  - bundler
+  - dev-server
+  - esm
+tldr: >-
+  The default build tool for modern frontend work. In development it serves your
+  source over native ES modules with no bundling, so startup is near-instant
+  regardless of project size. For production it bundles — and as of v8 that's
+  Rolldown, a single Rust bundler replacing the old esbuild-plus-Rollup pair.
+whenToUse: >-
+  For essentially any new frontend project. It's the default under React Router,
+  TanStack Start, SvelteKit, Nuxt, Astro, and Vitest, which means the plugin
+  ecosystem and the answers you'll find online are aimed at it. Config that
+  used to take a day now takes a few lines.
+whenNotTo: >-
+  When you're on a large, working webpack setup with custom loaders — migration
+  costs real time and the payoff is developer experience rather than shipped
+  behaviour. Also not the tool for bundling a Node backend, where you likely
+  need no bundler at all.
+alternatives:
+  - slug: webpack
+    reason: >-
+      The long-standing incumbent, with a plugin for every conceivable case and
+      an enormous body of existing configuration. Choose it when you need
+      something genuinely exotic that nothing else supports; otherwise its
+      configuration burden and dev-server startup are exactly what Vite exists
+      to fix.
+  - slug: rspack
+    reason: >-
+      A Rust rewrite of webpack that keeps webpack's config format and plugin
+      API. The pragmatic choice for migrating a large webpack codebase — you get
+      the speed without rewriting config, which a move to Vite would require.
+  - slug: parcel
+    reason: >-
+      Zero-configuration by design, with automatic detection of most file types.
+      Appealing for quick projects, but Vite's explicit config and far larger
+      plugin ecosystem tend to win once a project grows.
+docsUrl: https://vite.dev/
+popularity: high
+status: published
+verified: false
+lastReviewed: "2026-08-15"
+---
+
+## Introduction
+
+Vite is a frontend build tool and dev server. Current major version: **v8**
+(8.2.x at the time of writing); v7 remains extremely common and is still
+supported. It requires Node `^20.19` or `>=22.12`.
+
+Its original insight was about development, not production. Traditional
+bundlers build your entire application before they can serve anything, so
+startup time grows with the codebase. Vite instead serves source files directly
+over **native ES modules** — the browser requests what it needs, and Vite
+transforms each file on demand. Cold start is roughly constant whether the
+project has fifty files or five thousand, and hot updates only invalidate the
+module that changed.
+
+Production still gets bundled, because hundreds of unbundled requests over a
+network is a different problem from a local dev server.
+
+## v8 replaced the bundlers with Rolldown
+
+This is the headline change, and it's visible in the dependency list. Vite 7
+depended on **both** `esbuild` (fast dev transforms) and `rollup` (optimised
+production builds). Vite 8 depends on **`rolldown`** instead — one Rust bundler
+doing both jobs.
+
+That two-bundler split was a long-standing source of subtle bugs: dev and
+production could disagree because different tools processed your code. One
+bundler removes that class of problem, and production builds get substantially
+faster.
+
+What this means in practice:
+
+- **`build.rollupOptions` is now `build.rolldownOptions`.** A compatibility
+  layer converts the old option names, so most projects upgrade without config
+  changes.
+- **Rollup-specific plugins may break** if they rely on Rollup internals rather
+  than the shared plugin interface.
+- **Migrating a large project?** Switch to the `rolldown-vite` package while
+  still on Vite 7 first. That isolates bundler problems from everything else in
+  the v8 upgrade.
+
+One correction worth making, since migration guides get it wrong: **ESM-only is
+not new in v8.** Vite 7 was already `type: module` with no CommonJS export. If
+your config is CommonJS, that was already a problem.
+
+<DifficultyTabs>
+
+<Level value="easy">
+
+```bash
+npm create vite@latest my-app
+cd my-app && npm install && npm run dev
+```
+
+The scaffolder asks for a framework and a language, and gives you a project with
+three scripts:
+
+```json
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  }
+}
+```
+
+`preview` serves the *built* output — always check a production build there
+before deploying, since dev and build differ in ways that matter.
+
+The entry point is `index.html` at the project root, not in a `public` folder.
+Vite treats it as source and rewrites the script tag during build:
+
+```html
+<div id="root"></div>
+<script type="module" src="/src/main.jsx"></script>
+```
+
+Importing an asset returns a URL, hashed and copied during build:
+
+```js
+import logo from './logo.svg'
+
+<img src={logo} />
+```
+
+Files in `public/` are served at the root and copied verbatim, with no hashing —
+use it for things that need a stable name, like `robots.txt`.
+
+Environment variables must be prefixed `VITE_` to be exposed to client code,
+which stops you accidentally shipping a secret:
+
+```bash
+# .env
+VITE_API_URL=https://api.example.com
+```
+
+```js
+import.meta.env.VITE_API_URL
+```
+
+</Level>
+
+<Level value="medium">
+
+A config file covers most day-to-day needs:
+
+```js
+import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite'
+
+export default defineConfig({
+  plugins: [react()],
+
+  resolve: {
+    alias: { '~': '/src' },
+  },
+
+  server: {
+    port: 3000,
+    proxy: {
+      // Sends /api/* to the backend in dev, avoiding CORS entirely.
+      '/api': { target: 'http://localhost:8080', changeOrigin: true },
+    },
+  },
+})
+```
+
+**Deploying under a subpath** needs `base`, and it's worth keeping as a single
+constant rather than scattering the prefix:
+
+```js
+export default defineConfig({ base: '/my-app/' })
+```
+
+Anywhere you need it at runtime, `import.meta.env.BASE_URL` holds the same
+value.
+
+**CSS works with no configuration.** Any file ending `.module.css` is treated as
+a CSS module; `.scss` and `.less` just need the preprocessor installed:
+
+```js
+import styles from './Button.module.css'
+```
+
+**`import.meta.glob` imports many files at once** — the basis of most file-based
+routing and content systems:
+
+```js
+// Lazy: each becomes its own chunk, loaded on demand.
+const pages = import.meta.glob('./pages/*.jsx')
+
+// Eager: imported up front.
+const icons = import.meta.glob('./icons/*.svg', { eager: true })
+```
+
+The pattern must be a literal string — Vite resolves it at build time, so a
+variable won't work.
+
+**Modes and env files** let you vary configuration per environment:
+
+```bash
+.env                # always loaded
+.env.local          # always, git-ignored
+.env.production     # only for production builds
+```
+
+`vite build --mode staging` loads `.env.staging`.
+
+</Level>
+
+<Level value="advanced">
+
+**Library mode** builds a package rather than an app, with peer dependencies
+left external so consumers don't get a second copy of React:
+
+```js
+export default defineConfig({
+  build: {
+    lib: {
+      entry: 'src/index.ts',
+      name: 'MyLib',
+      formats: ['es', 'cjs'],
+    },
+    rollupOptions: {
+      external: ['react', 'react-dom'],
+      output: { globals: { react: 'React' } },
+    },
+  },
+})
+```
+
+In v8 this is `rolldownOptions`, though the compatibility layer still accepts
+the old key.
+
+**Writing a plugin** is worth knowing even if you never publish one — a
+project-local plugin is often the cleanest way to generate something at build
+time:
+
+```js
+function buildInfoPlugin() {
+  const virtualId = 'virtual:build-info'
+
+  return {
+    name: 'build-info',
+
+    resolveId(id) {
+      if (id === virtualId) return '\0' + virtualId
+    },
+
+    load(id) {
+      if (id === '\0' + virtualId) {
+        return `export const builtAt = ${JSON.stringify(new Date().toISOString())}`
+      }
+    },
+
+    // Emit a real file into the output directory.
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'meta.json', source: '{}' })
+    },
+  }
+}
+```
+
+The `\0` prefix marks the id as virtual by convention, so other plugins leave it
+alone. `configureServer` adds dev-only middleware, which is how you serve
+generated files in dev and emit them at build.
+
+**Plugin ordering matters.** `enforce: 'pre'` runs before Vite's core
+transforms, `enforce: 'post'` after. Anything that must see original source —
+compiling a custom file format, for instance — needs `pre`, or Vite will have
+already transformed the code.
+
+**Dependency pre-bundling** is the other half of the dev-speed story.
+Node modules are converted to ESM and bundled once, then cached in
+`node_modules/.vite`. When a dependency misbehaves, that cache is usually the
+culprit:
+
+```js
+optimizeDeps: {
+  include: ['some-cjs-package'],  // force pre-bundling
+  exclude: ['my-linked-package'], // skip it, e.g. a local workspace package
+}
+```
+
+Deleting `node_modules/.vite` or running `vite --force` clears it.
+
+**Control chunking** when the default splitting produces one oversized bundle:
+
+```js
+build: {
+  rollupOptions: {
+    output: {
+      manualChunks: {
+        vendor: ['react', 'react-dom'],
+      },
+    },
+  },
+}
+```
+
+Measure first — `rollup-plugin-visualizer` shows what's actually large, and
+manual chunking often makes things worse by defeating automatic splitting.
+
+</Level>
+
+</DifficultyTabs>
