@@ -1,0 +1,334 @@
+---
+title: Styled Components
+category: styling
+tags:
+  - css
+  - styling
+  - css-in-js
+  - runtime
+tldr: >-
+  The library that popularised CSS-in-JS. Tagged template literals produce real
+  React components with styles attached, so `Button` is both the markup and the
+  styling. Still widely deployed, but its maintainer no longer recommends it for
+  new projects.
+whenToUse: >-
+  When you're already using it — it remains stable, actively patched, and there
+  is no urgency to migrate a working codebase. For new work, choose it only if
+  you specifically want props-driven styles in a codebase that will never touch
+  React Server Components, and you value its very large ecosystem of existing
+  components and examples.
+whenNotTo: >-
+  On new projects, per the maintainer's own guidance. It cannot run in React
+  Server Components — it leans heavily on Context, which RSC doesn't provide —
+  and it carries a real runtime cost that build-time approaches don't. If you
+  want this programming model on something new, Emotion is the more actively
+  developed sibling.
+alternatives:
+  - slug: emotion
+    reason: >-
+      Nearly the same API and mental model, so it's the natural destination if
+      you want to keep writing CSS-in-JS. It adds the css prop for composing
+      styles without wrapper components, and is generally lighter — though it's
+      also slow-moving and shares the same Server Component limitation.
+  - slug: tailwind-css
+    reason: >-
+      The most common migration target, and the trade is deliberate: you give up
+      runtime-computed styles entirely and get zero runtime cost, Server
+      Component compatibility, and enforced design constraints in return.
+  - slug: css-modules
+    reason: >-
+      Choose it if what you actually valued was scoped class names rather than
+      styling in JavaScript. It's plain CSS with no runtime, and the migration
+      is mechanical — though you lose props-driven styling completely.
+docsUrl: https://styled-components.com/docs
+popularity: high
+status: published
+verified: false
+lastReviewed: "2026-08-15"
+---
+
+## Introduction
+
+Styled Components is the library that made CSS-in-JS mainstream. You write CSS
+in a tagged template literal and get back a real React component:
+
+```jsx
+const Button = styled.button`
+  padding: 0.5rem 1rem;
+  background: #4f46e5;
+  color: white;
+`
+```
+
+`Button` is now a component you render like any other. There is no class name to
+invent, no separate stylesheet, and no chance of a collision — the library
+generates a unique class and injects the CSS as the component renders.
+
+Current major version: **v6** (6.5.2 at the time of writing). A **v7 is in
+prerelease**, published only under a `test` dist-tag, so `npm install
+styled-components` still gives you v6.
+
+One useful v6 change: TypeScript types ship with the package. The separate
+`@types/styled-components` package is for v5 and should be removed when you
+upgrade.
+
+## Project status — read this before adopting
+
+This needs stating plainly, because the situation is widely misreported in both
+directions.
+
+In **March 2025** the lead maintainer announced the project was entering
+maintenance mode, and said directly: *"For new projects, I would not recommend
+adopting styled-components."* The stated reasons were that CSS-in-JS has fallen
+out of favour relative to utility-first CSS, and — more fundamentally — that
+styled-components depends heavily on React Context, which React Server
+Components do not support.
+
+That announcement produced a wave of "RIP styled-components" posts. **Those
+overstate it.** In February 2026 the maintainer pushed back explicitly:
+*"So please don't freak out, it's not abandonware."* The release history bears
+that out — 6.5.0, 6.5.1, and 6.5.2 all shipped within a single week in August
+2026, including real work on TypeScript check performance, and the v7 prerelease
+line is under genuine development.
+
+So the accurate summary is: **actively patched, not actively evolving, and not
+recommended for new adoption by the person who maintains it.** The maintainer is
+openly looking for co-maintainers. If you have a working codebase on it, there is
+no fire — plan a migration on your own schedule, or don't.
+
+The durable technical constraint is the Server Components one. It isn't a
+maintenance question and won't be fixed by more contributors: a runtime that
+injects styles during render has nowhere to run when there is no client runtime.
+
+<DifficultyTabs>
+
+<Level value="easy">
+
+```bash
+npm install styled-components
+```
+
+Any HTML element is available as a method on `styled`:
+
+```jsx
+import styled from 'styled-components'
+
+const Button = styled.button`
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 8px;
+  background: #4f46e5;
+  color: white;
+  cursor: pointer;
+`
+
+function App() {
+  return <Button onClick={save}>Save</Button>
+}
+```
+
+Styles can depend on props, which is the core appeal:
+
+```jsx
+const Button = styled.button`
+  background: ${(props) => (props.$danger ? '#dc2626' : '#4f46e5')};
+`
+
+<Button $danger>Delete</Button>
+```
+
+The `$` prefix marks a **transient prop** — one consumed by styling and not
+forwarded to the DOM. Without it, React warns about an unknown `danger`
+attribute on a real `button` element. Prefix any prop that exists purely for
+styling.
+
+Nesting and pseudo-selectors work as in Sass, with `&` referring to the
+component:
+
+```jsx
+const Card = styled.div`
+  padding: 1.5rem;
+
+  &:hover {
+    border-color: #4f46e5;
+  }
+
+  h2 {
+    margin-top: 0;
+  }
+`
+```
+
+</Level>
+
+<Level value="medium">
+
+**Extend a component by wrapping it.** `styled()` accepts any component that
+takes a `className`:
+
+```jsx
+const PrimaryButton = styled(Button)`
+  background: #16a34a;
+`
+
+// Works with third-party components too, provided they apply className.
+const StyledLink = styled(RouterLink)`
+  text-decoration: none;
+`
+```
+
+If styling a library component does nothing, it's almost always because that
+component drops the `className` it was handed.
+
+**Theming** puts a theme object in context and passes it to every interpolation:
+
+```jsx
+import { ThemeProvider } from 'styled-components'
+
+const theme = { colors: { primary: '#4f46e5' }, radius: '8px' }
+
+<ThemeProvider theme={theme}>
+  <App />
+</ThemeProvider>
+```
+
+```jsx
+const Button = styled.button`
+  background: ${(props) => props.theme.colors.primary};
+  border-radius: ${(props) => props.theme.radius};
+`
+```
+
+`useTheme` reads the same object from a component when you need it in JavaScript
+rather than in styles.
+
+**Reusable style fragments** use the `css` helper. Interpolating a plain string
+would lose any nested functions:
+
+```jsx
+import { css, styled } from 'styled-components'
+
+const truncate = css`
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+`
+
+const Title = styled.h2`
+  ${truncate}
+  font-size: 1.25rem;
+`
+```
+
+**Global styles and keyframes** have dedicated helpers:
+
+```jsx
+import { createGlobalStyle, keyframes } from 'styled-components'
+
+const GlobalStyle = createGlobalStyle`
+  body { margin: 0; font-family: system-ui; }
+`
+
+const fadeIn = keyframes`
+  from { opacity: 0; }
+  to { opacity: 1; }
+`
+
+const Toast = styled.div`
+  animation: ${fadeIn} 200ms ease-out;
+`
+```
+
+Render `GlobalStyle` once, near the root of the tree.
+
+**Default props with `.attrs`** avoids repeating the same attribute at every call
+site:
+
+```jsx
+const PasswordInput = styled.input.attrs({ type: 'password' })`
+  border: 1px solid #cbd5e1;
+`
+```
+
+</Level>
+
+<Level value="advanced">
+
+**Keep dynamic interpolation off hot paths.** Every distinct interpolation result
+produces a new generated class. A value that changes continuously creates classes
+without bound and grows the stylesheet as the user interacts:
+
+```jsx
+// Bad — a new class per pixel.
+const Bar = styled.div`
+  width: ${(props) => props.$percent}%;
+`
+
+// Good — one class, a CSS variable that changes.
+const Bar = styled.div`
+  width: var(--percent);
+  transition: width 150ms ease-out;
+`
+
+<Bar style={{ '--percent': `${percent}%` }} />
+```
+
+Splitting styles into a static block plus a small variable layer is the single
+biggest performance win available in any runtime CSS-in-JS library.
+
+**Control prop forwarding globally.** Transient props handle most cases, but
+`shouldForwardProp` is the systematic version — useful when wrapping components
+whose prop names you don't control:
+
+```jsx
+const Button = styled.button.withConfig({
+  shouldForwardProp: (prop) => !['variant', 'size'].includes(prop),
+})`
+  background: ${(props) => (props.variant === 'danger' ? 'red' : 'blue')};
+`
+```
+
+**Referring to another component** in a selector lets a parent style a child
+without a class name — the component itself is a valid selector:
+
+```jsx
+const Icon = styled.span`
+  opacity: 0.6;
+`
+
+const Button = styled.button`
+  &:hover ${Icon} {
+    opacity: 1;
+  }
+`
+```
+
+This only works with components created by `styled`, and the referenced one must
+be defined first.
+
+**Server rendering** needs the collected styles inlined into the document.
+`ServerStyleSheet` gathers them during render:
+
+```jsx
+import { ServerStyleSheet } from 'styled-components'
+
+const sheet = new ServerStyleSheet()
+const html = renderToString(sheet.collectStyles(<App />))
+const styleTags = sheet.getStyleTags()
+```
+
+Frameworks usually wire this up for you. What no configuration can fix is React
+Server Components — a component rendered on the server with no client runtime
+has nothing to inject styles, so any styled component needs a `'use client'`
+boundary. In an RSC-first application that boundary tends to spread until it
+covers most of the tree, which defeats the point of using RSC at all.
+
+**Migrating out.** If you decide to move, the mechanical path depends on what you
+were using it for. Styles that never read props convert cleanly to CSS Modules or
+Tailwind. Styles that do read props usually collapse into a small set of
+variants — enumerate them, and what looked like dynamic styling is often three
+fixed cases plus a CSS variable.
+
+</Level>
+
+</DifficultyTabs>
