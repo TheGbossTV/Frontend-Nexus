@@ -1,0 +1,328 @@
+---
+title: Native Fetch API
+category: data-fetching
+tags:
+  - fetch
+  - http
+  - browser
+  - platform
+tldr: >-
+  The built-in way to make HTTP requests. Promise-based, available in every
+  modern browser and in Node without installing anything. Powerful and
+  low-level — it will happily hand you a 500 response without complaining, so
+  you check `response.ok` yourself.
+whenToUse: >-
+  As the default. It's already there, it's the thing every HTTP library is built
+  on, and for one-shot requests — a form submission, a server-side data load, a
+  route loader — it's all you need. Knowing it well also makes every wrapper
+  library easier to reason about.
+whenNotTo: >-
+  When you're managing *cached* server data across a UI: multiple components
+  wanting the same resource, background revalidation, retries, deduplication,
+  and loading state. Rebuilding that on raw fetch means reimplementing a query
+  library, badly. Reach for one instead.
+alternatives:
+  - slug: tanstack-query
+    reason: >-
+      The right answer once data is displayed rather than merely fetched. It
+      wraps fetch and adds the cache layer — deduplication, background
+      refetching, stale tracking — which is exactly the part that's tedious and
+      error-prone to hand-roll.
+  - slug: axios
+    reason: >-
+      Choose it for interceptors, automatic JSON handling, upload progress, and
+      errors that throw on 4xx/5xx by default. Much of its original appeal was
+      filling gaps fetch has since closed, so the case for a new dependency is
+      weaker than it used to be.
+  - slug: ky
+    reason: >-
+      A thin wrapper over fetch that adds retries, timeouts, and throwing on
+      error statuses, while keeping the same API shape. A reasonable middle
+      ground when you want the ergonomics without a cache layer.
+docsUrl: https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API
+popularity: high
+status: published
+verified: false
+lastReviewed: "2026-08-15"
+---
+
+## Introduction
+
+`fetch` is a web platform API, not a library — there's no version to track and
+nothing to install. It's available in every current browser, and **global in
+Node since v18**, so the same code runs in both. `Headers`, `Request`,
+`Response`, `FormData`, and `AbortController` come with it.
+
+```js
+const response = await fetch('/api/todos')
+const todos = await response.json()
+```
+
+Two design decisions surprise nearly everyone coming from older HTTP libraries,
+and both are deliberate.
+
+## It does not reject on HTTP errors
+
+A `fetch` promise rejects only when the request genuinely *fails* — network
+down, DNS failure, malformed URL, CORS block. A response of 404 or 500 is a
+successful round trip as far as fetch is concerned, so the promise resolves
+normally:
+
+```js
+const response = await fetch('/api/missing')
+// No throw. response.ok === false, response.status === 404
+```
+
+This is the single most common bug in hand-written fetch code. Without an
+explicit check, the error page's body gets parsed as your data:
+
+```js
+if (!response.ok) {
+  throw new Error(`HTTP ${response.status}`)
+}
+```
+
+Every wrapper library that "throws on errors" is just doing this for you.
+
+## The body can only be read once
+
+A `Response` body is a stream, so `json()`, `text()`, and `blob()` each consume
+it. Calling two of them on the same response throws:
+
+```js
+const data = await response.json()
+const text = await response.text() // TypeError: body already read
+```
+
+If you need it twice — logging a failed response before throwing, say — call
+`response.clone()` first, or read it once as text and parse it yourself.
+
+<DifficultyTabs>
+
+<Level value="easy">
+
+A GET request, with the status check that fetch won't do for you:
+
+```js
+async function getTodos() {
+  const response = await fetch('/api/todos')
+
+  if (!response.ok) {
+    throw new Error(`Failed to load todos: ${response.status}`)
+  }
+
+  return response.json()
+}
+```
+
+Sending JSON requires both the body and the header — fetch won't infer the
+content type:
+
+```js
+const response = await fetch('/api/todos', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ title: 'Buy milk' }),
+})
+```
+
+Build query strings with `URLSearchParams` rather than concatenating, so
+encoding is handled for you:
+
+```js
+const params = new URLSearchParams({ status: 'open', page: '2' })
+const response = await fetch(`/api/todos?${params}`)
+```
+
+Reading the response depends on what it is:
+
+```js
+await response.json()  // parsed JSON
+await response.text()  // raw string
+await response.blob()  // binary, e.g. an image
+```
+
+</Level>
+
+<Level value="medium">
+
+**Cancel requests with `AbortController`.** This matters in React: without it, a
+response arriving after the component unmounts sets state on nothing, and two
+rapid requests can resolve out of order:
+
+```js
+const controller = new AbortController()
+
+fetch('/api/search?q=react', { signal: controller.signal })
+
+controller.abort() // cancels it
+```
+
+```jsx
+useEffect(() => {
+  const controller = new AbortController()
+
+  fetch(`/api/search?q=${query}`, { signal: controller.signal })
+    .then((r) => r.json())
+    .then(setResults)
+    .catch((error) => {
+      if (error.name !== 'AbortError') throw error
+    })
+
+  return () => controller.abort()
+}, [query])
+```
+
+**Timeouts have a built-in shortcut.** `AbortSignal.timeout()` saves wiring a
+timer to a controller:
+
+```js
+const response = await fetch('/api/slow', {
+  signal: AbortSignal.timeout(5000),
+})
+```
+
+One detail worth knowing: a timeout rejects with a **`TimeoutError`**, not an
+`AbortError`. Code that only checks for `AbortError` will treat a timeout as an
+unexpected failure:
+
+```js
+try {
+  await fetch(url, { signal: AbortSignal.timeout(5000) })
+} catch (error) {
+  if (error.name === 'TimeoutError') { /* took too long */ }
+  if (error.name === 'AbortError')   { /* we cancelled it */ }
+}
+```
+
+**File uploads use `FormData`.** Do *not* set `Content-Type` yourself here — the
+browser must generate it, because it includes the multipart boundary:
+
+```js
+const form = new FormData()
+form.append('avatar', fileInput.files[0])
+
+await fetch('/api/avatar', { method: 'POST', body: form })
+```
+
+**Cookies need opting in** for cross-origin requests:
+
+```js
+fetch('https://api.example.com/me', { credentials: 'include' })
+```
+
+**A small wrapper removes the repetition** without taking on a dependency:
+
+```js
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...options.headers },
+  })
+
+  if (!response.ok) {
+    const body = await response.text()
+    throw new Error(`HTTP ${response.status}: ${body}`)
+  }
+
+  return response.status === 204 ? null : response.json()
+}
+```
+
+The 204 check matters — a No Content response has an empty body, and calling
+`json()` on it throws.
+
+</Level>
+
+<Level value="advanced">
+
+**Combine cancellation reasons with `AbortSignal.any()`.** Useful when a request
+should stop either on timeout *or* because the user navigated away:
+
+```js
+const controller = new AbortController()
+
+const response = await fetch(url, {
+  signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5000)]),
+})
+```
+
+The resulting signal aborts as soon as any input does, and `signal.reason`
+tells you which.
+
+**Stream a response** instead of buffering it, for large payloads or progressive
+rendering:
+
+```js
+const response = await fetch('/api/export')
+const reader = response.body.getReader()
+const decoder = new TextDecoder()
+
+while (true) {
+  const { done, value } = await reader.read()
+  if (done) break
+  process(decoder.decode(value, { stream: true }))
+}
+```
+
+`response.body` is a `ReadableStream`, which is also how you'd track download
+progress — compare bytes read against the `Content-Length` header.
+
+**Retry with backoff**, but only for things worth retrying. Retrying a 400 just
+fails more slowly:
+
+```js
+async function fetchWithRetry(url, options, attempts = 3) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      const response = await fetch(url, options)
+      // Retry server errors and rate limits, not client mistakes.
+      if (response.status >= 500 || response.status === 429) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      return response
+    } catch (error) {
+      if (error.name === 'AbortError') throw error // honour cancellation
+      if (attempt === attempts - 1) throw error
+      await new Promise((resolve) => setTimeout(resolve, 2 ** attempt * 200))
+    }
+  }
+}
+```
+
+**`Request` and `Response` are constructible**, which is what makes service
+workers, mocking, and framework route handlers work the way they do:
+
+```js
+const request = new Request('/api/todos', { method: 'POST', body: '{}' })
+const response = Response.json({ ok: true }, { status: 201 })
+```
+
+`Response.json()` as a *static* method builds a JSON response — distinct from
+`response.json()`, which reads one.
+
+**Send data during page unload** with `keepalive`, since a normal fetch is
+cancelled when the document goes away:
+
+```js
+fetch('/api/analytics', {
+  method: 'POST',
+  body: JSON.stringify(event),
+  keepalive: true,
+})
+```
+
+There's a small payload limit (around 64 KB across all keepalive requests), so
+this is for beacons, not uploads.
+
+**Know your error taxonomy**, because they need different handling:
+
+- `TypeError` — network failure, CORS rejection, or bad arguments. The request
+  never completed.
+- `AbortError` — you cancelled it.
+- `TimeoutError` — `AbortSignal.timeout()` fired.
+- No error at all — the request completed; check `response.ok` yourself.
+
+</Level>
+
+</DifficultyTabs>
