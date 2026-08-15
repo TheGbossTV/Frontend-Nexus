@@ -1,0 +1,338 @@
+---
+title: Redux Toolkit
+category: state-management
+tags:
+  - state
+  - redux
+  - react
+  - store
+  - immer
+tldr: >-
+  The official, batteries-included way to write Redux. `configureStore` and
+  `createSlice` remove almost all the old boilerplate, Immer lets you write
+  "mutating" update logic safely, and RTK Query ships in the box for data
+  fetching.
+whenToUse: >-
+  When you want an explicit, auditable action-and-reducer flow that a whole team
+  can follow, and you value the DevTools time-travel debugging that comes with
+  it. It earns its keep on large, long-lived apps where "any component can
+  mutate anything" becomes a real liability, and where a consistent, greppable
+  update pattern is worth more than terseness.
+whenNotTo: >-
+  When the app is small or the state is mostly UI-local — the structure costs
+  more than it returns, and a lighter store is easier to live with. Also skip it
+  if your only real need is cached server data: RTK Query solves that, but so do
+  smaller dedicated libraries you can adopt without taking on a Redux store at
+  all.
+alternatives:
+  - slug: zustand
+    reason: >-
+      Choose it when you want shared state without the ceremony — no actions, no
+      reducers, no provider. You give up the enforced update pattern and
+      time-travel debugging, which is exactly the trade you want on a smaller
+      app and exactly the one you don't want on a large team.
+  - slug: jotai
+    reason: >-
+      Choose it when state decomposes into many small independent values rather
+      than one big object. Jotai is bottom-up and atom-first, so there's no
+      single store to structure — the opposite of Redux's deliberately
+      centralised model.
+  - slug: react-context
+    reason: >-
+      Built in, and enough on its own for values that rarely change. Reach for
+      Redux Toolkit only once you actually feel the problems Context has —
+      no selectors, so every consumer re-renders, and no structure for updates.
+docsUrl: https://redux-toolkit.js.org/
+popularity: high
+status: published
+verified: false
+lastReviewed: "2026-08-15"
+---
+
+## Introduction
+
+Redux Toolkit (RTK) is the official, opinionated toolset for Redux, maintained
+by the Redux team. Current major version: **v2** (2.12.x at the time of
+writing), paired with **react-redux v9** for the React bindings.
+
+It exists because classic Redux was correct but exhausting: action type
+constants, hand-written action creators, switch-statement reducers, and manual
+immutable updates spread across several files for a single feature. RTK collapses
+all of that into `createSlice`, and it is now the approach the Redux docs teach
+by default — plain `createStore` is deprecated in its favour.
+
+Two things do most of the work. `configureStore` sets up the store with good
+defaults already applied: your reducers combined, the thunk middleware included,
+development-only checks for accidental mutation and non-serialisable values, and
+the Redux DevTools connected. `createSlice` generates the action types, action
+creators, and reducer from one object.
+
+## Immer, and why reducers look like they mutate
+
+RTK bundles [Immer](https://immerjs.github.io/immer/), so reducer code that
+looks like it mutates state is safe:
+
+```js
+reducers: {
+  increment: (state) => {
+    state.value += 1
+  },
+}
+```
+
+`state` here is a draft proxy. Immer records what you touched and produces a new
+immutable state from it, so you get the readability of mutation with the
+guarantees of immutability. The one rule: either mutate the draft *or* return a
+brand-new value — never both in the same reducer.
+
+## RTK Query
+
+RTK Query is included in the same package rather than being a separate install.
+It's a data-fetching and caching layer built on top of the store, so if you're
+already running Redux it usually removes the need for a second server-state
+library. It generates hooks, de-dupes identical requests across components, and
+handles cache lifetimes for you.
+
+<DifficultyTabs>
+
+<Level value="easy">
+
+A slice bundles the state, the action types, and the reducer logic together:
+
+```js
+import { createSlice } from '@reduxjs/toolkit'
+
+const counterSlice = createSlice({
+  name: 'counter',
+  initialState: { value: 0 },
+  reducers: {
+    increment: (state) => {
+      state.value += 1
+    },
+    incrementBy: (state, action) => {
+      state.value += action.payload
+    },
+    reset: () => ({ value: 0 }),
+  },
+})
+
+export const { increment, incrementBy, reset } = counterSlice.actions
+export default counterSlice.reducer
+```
+
+`configureStore` wires the slice reducers together:
+
+```js
+import { configureStore } from '@reduxjs/toolkit'
+import counterReducer from './counterSlice'
+
+export const store = configureStore({
+  reducer: {
+    counter: counterReducer,
+  },
+})
+```
+
+Unlike Zustand, Redux does need a provider at the root:
+
+```jsx
+import { Provider } from 'react-redux'
+import { store } from './store'
+
+createRoot(document.getElementById('root')).render(
+  <Provider store={store}>
+    <App />
+  </Provider>,
+)
+```
+
+Components read with a selector and write by dispatching an action:
+
+```jsx
+import { useDispatch, useSelector } from 'react-redux'
+import { increment } from './counterSlice'
+
+function Counter() {
+  const value = useSelector((state) => state.counter.value)
+  const dispatch = useDispatch()
+
+  return <button onClick={() => dispatch(increment())}>Count: {value}</button>
+}
+```
+
+</Level>
+
+<Level value="medium">
+
+**Type the store once, then use pre-typed hooks everywhere.** Deriving the types
+from the store means they can never drift from the real shape:
+
+```ts
+// store.ts
+export const store = configureStore({
+  reducer: { counter: counterReducer },
+})
+
+export type RootState = ReturnType<typeof store.getState>
+export type AppDispatch = typeof store.dispatch
+```
+
+```ts
+// hooks.ts
+import { useDispatch, useSelector } from 'react-redux'
+import type { AppDispatch, RootState } from './store'
+
+export const useAppDispatch = useDispatch.withTypes<AppDispatch>()
+export const useAppSelector = useSelector.withTypes<RootState>()
+```
+
+`withTypes` is the current recommendation in react-redux 9 — it replaces the
+older habit of hand-writing `useSelector: TypedUseSelectorHook<RootState>`. Use
+`useAppSelector` and `useAppDispatch` in components from then on; the plain hooks
+won't know about your thunk middleware.
+
+**Async work goes through `createAsyncThunk`**, which dispatches
+pending/fulfilled/rejected actions for you:
+
+```ts
+import { createAsyncThunk, createSlice } from '@reduxjs/toolkit'
+
+export const fetchUser = createAsyncThunk(
+  'users/fetchById',
+  async (userId: string) => {
+    const response = await fetch(`/api/users/${userId}`)
+    return response.json()
+  },
+)
+
+const usersSlice = createSlice({
+  name: 'users',
+  initialState: { entity: null, loading: false },
+  reducers: {},
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchUser.pending, (state) => {
+        state.loading = true
+      })
+      .addCase(fetchUser.fulfilled, (state, action) => {
+        state.loading = false
+        state.entity = action.payload
+      })
+  },
+})
+```
+
+Note `extraReducers` uses the builder callback — the object form was removed in
+RTK 2.
+
+**Derive rather than duplicate.** `createSelector` memoises, so a computed value
+isn't recalculated on unrelated state changes:
+
+```ts
+import { createSelector } from '@reduxjs/toolkit'
+
+const selectTodos = (state: RootState) => state.todos.items
+
+export const selectDoneCount = createSelector(
+  [selectTodos],
+  (todos) => todos.filter((todo) => todo.done).length,
+)
+```
+
+</Level>
+
+<Level value="advanced">
+
+**RTK Query replaces most hand-written fetching code.** Define the endpoints
+once and you get hooks, caching, de-duplication, and loading state:
+
+```ts
+import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
+
+export const api = createApi({
+  reducerPath: 'api',
+  baseQuery: fetchBaseQuery({ baseUrl: '/api/' }),
+  tagTypes: ['Todo'],
+  endpoints: (builder) => ({
+    getTodos: builder.query({
+      query: () => 'todos',
+      providesTags: ['Todo'],
+    }),
+    addTodo: builder.mutation({
+      query: (body) => ({ url: 'todos', method: 'POST', body }),
+      // Refetches anything providing 'Todo' — no manual cache juggling.
+      invalidatesTags: ['Todo'],
+    }),
+  }),
+})
+
+export const { useGetTodosQuery, useAddTodoMutation } = api
+```
+
+It needs its reducer *and* its middleware registered:
+
+```ts
+export const store = configureStore({
+  reducer: { [api.reducerPath]: api.reducer },
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware().concat(api.middleware),
+})
+```
+
+The `providesTags` / `invalidatesTags` pairing is the part worth internalising:
+a mutation declares what it invalidated, and every query providing that tag
+refetches. You describe relationships instead of imperatively clearing caches.
+
+**Side effects without thunks.** The listener middleware reacts to dispatched
+actions, which suits "when X happens, also do Y" logic that doesn't belong in a
+component:
+
+```ts
+import { createListenerMiddleware } from '@reduxjs/toolkit'
+
+const listenerMiddleware = createListenerMiddleware()
+
+listenerMiddleware.startListening({
+  actionCreator: settingsChanged,
+  effect: async (action, listenerApi) => {
+    localStorage.setItem('settings', JSON.stringify(action.payload))
+  },
+})
+
+const store = configureStore({
+  reducer: rootReducer,
+  middleware: (getDefaultMiddleware) =>
+    // prepend, not concat — it can receive actions containing functions, so it
+    // has to run before the serializability check.
+    getDefaultMiddleware().prepend(listenerMiddleware.middleware),
+})
+```
+
+**Normalise collections with `createEntityAdapter`.** Storing a list as an array
+means every lookup is a scan and every update rewrites the array. The adapter
+keeps `{ ids, entities }` and gives you sorted selectors for free:
+
+```ts
+import { createEntityAdapter, createSlice } from '@reduxjs/toolkit'
+
+const todosAdapter = createEntityAdapter({
+  sortComparer: (a, b) => a.title.localeCompare(b.title),
+})
+
+const todosSlice = createSlice({
+  name: 'todos',
+  initialState: todosAdapter.getInitialState(),
+  reducers: {
+    todoAdded: todosAdapter.addOne,
+    todosReceived: todosAdapter.setAll,
+    todoRemoved: todosAdapter.removeOne,
+  },
+})
+
+export const { selectAll: selectAllTodos, selectById: selectTodoById } =
+  todosAdapter.getSelectors((state) => state.todos)
+```
+
+</Level>
+
+</DifficultyTabs>
