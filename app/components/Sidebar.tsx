@@ -56,7 +56,7 @@ export function Sidebar() {
       <aside
         data-sidebar-panel=""
         aria-label="Site navigation"
-        className="fixed inset-y-0 left-0 z-30 w-72 shrink-0 overflow-y-auto border-r border-edge bg-surface p-5 lg:sticky lg:top-16 lg:z-0 lg:h-[calc(100vh-4rem)] lg:border-r-0 lg:bg-transparent lg:p-0 lg:pt-8"
+        className="fixed inset-y-0 left-0 z-30 w-72 shrink-0 overflow-y-auto border-r border-edge bg-surface p-5 lg:sticky lg:top-16 lg:z-0 lg:h-[calc(100vh-4rem)] lg:bg-transparent lg:px-6 lg:pt-8"
       >
         <nav className="space-y-6">
           {categories.map((category) => {

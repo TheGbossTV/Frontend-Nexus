@@ -32,9 +32,9 @@ export function Layout({ children }: { children: ReactNode }) {
       </head>
       <body className="min-h-screen bg-canvas text-ink antialiased">
         <Header />
-        <div className="mx-auto flex w-full max-w-7xl gap-10 px-6">
+        <div className="flex w-full">
           <Sidebar />
-          <main className="min-w-0 flex-1 py-10">{children}</main>
+          <main className="min-w-0 flex-1 px-8 py-10">{children}</main>
         </div>
         <ScrollRestoration />
         <Scripts />
