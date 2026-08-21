@@ -90,6 +90,37 @@ One correction worth making, since migration guides get it wrong: **ESM-only is
 not new in v8.** Vite 7 was already `type: module` with no CommonJS export. If
 your config is CommonJS, that was already a problem.
 
+## Quick Reference
+
+Config options come from `vite.config.ts`; the `import.meta` features are
+available in any source file Vite processes.
+
+- `defineConfig(config)` — wraps the config object so editors type-check it.
+- `base` — the public path everything is served under; the one option a subpath deploy hinges on.
+- `plugins` — the plugin array; order matters, and `enforce: 'pre' | 'post'` overrides it.
+- `resolve.alias` — path aliases, though a `tsconfig.json` `paths` plugin usually covers this.
+- `server.proxy` — forwards API paths to a backend in dev, avoiding CORS entirely.
+- `server.port` / `server.host` — the dev server's port, and whether it listens on the network.
+- `build.outDir` — where the production build is written; defaults to `dist`.
+- `build.sourcemap` — emits source maps for the production bundle.
+- `build.rolldownOptions` — bundler options in v8; the old `build.rollupOptions` name still maps onto it.
+- `build.lib` — library mode, for building a package rather than an app.
+- `css.modules` — CSS Modules behaviour, including `localsConvention` and `generateScopedName`.
+- `optimizeDeps.include` / `exclude` — overrides for dependency pre-bundling when a package is misdetected.
+- `define` — compile-time constant replacement, applied literally at build time.
+- `envPrefix` — which env variables get exposed to the client; `VITE_` by default.
+- `import.meta.env.BASE_URL` — the configured `base`, at runtime; the correct way to build a URL by hand.
+- `import.meta.env.DEV` / `.PROD` / `.MODE` — environment checks that tree-shake away in production.
+- `import.meta.glob('./x/*.ts')` — imports many files by pattern; lazy by default, `{ eager: true }` to inline them.
+- `import.meta.hot.accept(cb)` — accepts a hot update instead of triggering a page reload.
+- `import.meta.hot.dispose(cb)` — cleans up before a module is replaced.
+- `?url` — imports an asset's resolved URL rather than its contents.
+- `?raw` — imports a file's contents as a string.
+- `?inline` — inlines an asset as a base64 data URI.
+- `?worker` — imports a file as a Web Worker constructor.
+- `loadEnv(mode, dir, prefix?)` — reads `.env` files inside the config, where `import.meta.env` isn't available yet.
+- `mergeConfig(a, b)` — merges config objects, for sharing a base between app and test config.
+
 <DifficultyTabs>
 
 <Level value="easy">
