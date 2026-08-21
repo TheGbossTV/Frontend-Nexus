@@ -95,6 +95,24 @@ Two consequences follow, and both are avoidable:
    context holding both `theme` and `mousePosition` re-renders the theme
    consumers on every mouse move.
 
+## Quick Reference
+
+All of these are exports of `react` itself. The last few aren't context APIs, but
+they're what you pair context with in practice.
+
+- `createContext(defaultValue)` — creates the context object; the default applies only with no provider above.
+- `<SomeContext value={…}>` — the React 19 provider: the context object rendered directly.
+- `<SomeContext.Provider value={…}>` — the legacy provider form; still works, still everywhere in older code.
+- `useContext(SomeContext)` — reads the nearest provider's value; the standard way to consume.
+- `use(SomeContext)` — reads context too, but may be called inside conditions and loops.
+- `<SomeContext.Consumer>` — the render-prop reader; legacy, and rarely worth writing today.
+- `SomeContext.displayName` — sets the name React DevTools shows for the context.
+- `useState(initial)` — where the state usually comes from; context only distributes it.
+- `useReducer(reducer, initial)` — the same job for state with several related transitions.
+- `useMemo(fn, deps)` — stabilises the provider's `value` so consumers don't re-render on every parent render.
+- `useCallback(fn, deps)` — stabilises the handlers you put inside that value.
+- `memo(Component)` — memoises a component, but note it does *not* stop a context update from re-rendering it.
+
 <DifficultyTabs>
 
 <Level value="easy">
