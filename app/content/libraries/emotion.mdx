@@ -97,6 +97,30 @@ the Medium tab for the Vite configuration.
 Forgetting this is the classic first-time failure: the `css` prop is silently
 passed through to the DOM as an unknown attribute and no styles appear.
 
+## Quick Reference
+
+Emotion is split across packages, so each entry names its own. The `@emotion/css`
+group at the end is the framework-agnostic flavour — don't mix the two `css`
+functions in one file.
+
+- `css={…}` — from `@emotion/react`; the styling prop, once the JSX factory is configured.
+- ``css`…` `` — from `@emotion/react`; builds a style object to pass to that prop or compose into others.
+- ``styled.button`…` `` — from `@emotion/styled`; the styled-components-shaped API.
+- `styled(Component)` — the same for an existing component that accepts `className`.
+- `<Global styles={…} />` — from `@emotion/react`; global rules, resets, and `body` styles.
+- `keyframes` — from `@emotion/react`; defines an animation to interpolate into `animation`.
+- `<ThemeProvider theme>` — puts a theme into context.
+- `useTheme()` — reads that theme in a function component.
+- `withTheme(Component)` — the same for class components.
+- `<ClassNames>` — a render prop giving you a class name string, for APIs that need one.
+- `shouldForwardProp` — filters which props reach the DOM; Emotion has no `$` transient-prop convention.
+- `createCache(options)` — from `@emotion/cache`; sets the key, nonce, container, or prefixing.
+- `<CacheProvider value={…}>` — from `@emotion/react`; applies that cache to a subtree.
+- `/** @jsxImportSource @emotion/react */` — the per-file pragma that enables the `css` prop.
+- `css(…)` — from `@emotion/css`; returns a class name string instead of a style object.
+- `cx(…)` — from `@emotion/css`; merges class names, resolving conflicts the way Emotion intends.
+- `injectGlobal` — from `@emotion/css`; the global-styles equivalent outside React.
+
 <DifficultyTabs>
 
 <Level value="easy">
