@@ -91,6 +91,44 @@ failures:
 - **`findBy…`** — returns a promise, retrying until it appears. Use for anything
   async.
 
+## Quick Reference
+
+Three packages in play: `@testing-library/react` for rendering and queries,
+`@testing-library/user-event` for interaction, `@testing-library/jest-dom` for
+the matchers.
+
+- `render(<Component />)` — mounts into a container and returns the query set plus `rerender` and `unmount`.
+- `screen` — the same queries bound to `document.body`; the usual way to reach them.
+- `screen.getByRole(role, { name })` — the query to try first; matches the accessibility tree.
+- `screen.getByLabelText(text)` — form fields, by their associated label.
+- `screen.getByText(text)` — visible text content.
+- `screen.getByTestId(id)` — the escape hatch, for elements with no accessible handle.
+- `queryBy…` — returns `null` instead of throwing; the variant to use for asserting absence.
+- `findBy…` — returns a promise and retries, for anything that appears asynchronously.
+- `…AllBy…` — the plural form of any query, returning an array.
+- `within(element)` — scopes queries to a subtree, for one row of a table or one card in a list.
+- `rerender(<Component />)` — re-renders with new props, keeping the same mount.
+- `renderHook(fn)` — tests a hook in isolation, exposing its return value as `result.current`.
+- `waitFor(fn)` — retries an assertion until it passes or times out.
+- `waitForElementToBeRemoved(fn)` — waits for something to disappear, such as a spinner.
+- `act(fn)` — wraps state updates React would otherwise warn about; rarely needed directly.
+- `cleanup()` — unmounts between tests; automatic under Vitest and Jest with globals enabled.
+- `userEvent.setup()` — call it *before* `render`; returns the interaction API.
+- `user.click(element)` — a full click, with the hover and focus events a real one fires.
+- `user.type(element, text)` — types character by character, firing each key event.
+- `user.keyboard(text)` — key presses without a target, for shortcuts and `{Enter}`.
+- `user.clear(element)` — empties an input.
+- `user.selectOptions(select, value)` — picks from a `<select>`.
+- `user.upload(input, file)` — attaches a file to a file input.
+- `user.tab()` — moves focus, for testing keyboard navigation order.
+- `fireEvent.change(element, init)` — dispatches one raw DOM event; the lower-level fallback.
+- `expect(el).toBeInTheDocument()` — asserts presence.
+- `expect(el).toBeVisible()` — asserts it's actually visible, not just present.
+- `expect(el).toBeDisabled()` / `.toBeChecked()` — asserts control state.
+- `expect(el).toHaveValue(value)` — asserts a form control's value.
+- `expect(el).toHaveTextContent(text)` — asserts text, including from descendants.
+- `expect(el).toHaveAccessibleName(name)` — asserts what a screen reader would announce.
+
 <DifficultyTabs>
 
 <Level value="easy">
