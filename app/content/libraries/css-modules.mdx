@@ -96,6 +96,29 @@ Modules solves **scoping**. It does not give you:
 This narrowness is the point. It's the option with the least to learn and the
 least to regret.
 
+## Quick Reference
+
+There's no package to import, so this is the syntax the bundler understands plus
+the Vite options that change it.
+
+- `*.module.css` — the filename convention; that suffix is what turns scoping on.
+- `import styles from './x.module.css'` — the default import: an object mapping your names to generated ones.
+- `styles.root` — one generated class name, used as a `className`.
+- `composes: other` — inherits another class in the same file; must come before the other declarations.
+- `composes: other from './shared.module.css'` — inherits from another module.
+- `composes: helper from global` — inherits from a plain global class.
+- `:global(.name)` — opts one selector out of scoping, for third-party or markup you don't control.
+- `:global { … }` — the same for a whole block.
+- `:local(.name)` — opts back into scoping, needed when the default behaviour is global.
+- `@value size: 16px;` — a build-time constant, importable across modules with `@value x from './y.css'`.
+- `:export { name: value; }` — exposes a CSS value to JavaScript on the imported object.
+- `composes` with `:hover` — pseudo-class rules come along with the class they're attached to.
+- `css.modules.localsConvention` — Vite option; `'camelCase'` lets `.my-class` be read as `styles.myClass`.
+- `css.modules.generateScopedName` — Vite option; controls the generated name, useful for readable dev output.
+- `css.modules.scopeBehaviour` — Vite option; flips the default between `'local'` and `'global'`.
+- `css.modules.globalModulePaths` — Vite option; regexes for files to leave unscoped.
+- `clsx(…)` / `classnames(…)` — not part of the spec, but how conditional classes are usually combined.
+
 <DifficultyTabs>
 
 <Level value="easy">
