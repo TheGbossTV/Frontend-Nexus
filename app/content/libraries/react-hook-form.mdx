@@ -96,6 +96,35 @@ Zod is the most common pairing, and it's covered in its own entry. Note that the
 current resolver handles **both Zod 3 and Zod 4** through the same
 `@hookform/resolvers/zod` import — you don't need a version-specific subpath.
 
+## Quick Reference
+
+Hooks and components come from `react-hook-form`; resolvers are a separate
+install, `@hookform/resolvers`.
+
+- `useForm(options)` — creates the form; `mode`, `defaultValues`, and `resolver` are the options that matter.
+- `register(name, rules?)` — connects an uncontrolled input by spreading the returned props onto it.
+- `handleSubmit(onValid, onInvalid?)` — validates, then calls your handler with the parsed values.
+- `formState.errors` — validation errors keyed by field name.
+- `formState.isSubmitting` — true while the submit handler's promise is pending; use it to disable the button.
+- `formState.isDirty` / `dirtyFields` — whether anything, or which fields, changed from the defaults.
+- `formState.isValid` — current validity; requires a non-default `mode` to be meaningful.
+- `control` — the object you pass to `Controller`, `useFieldArray`, and the subscription hooks.
+- `<Controller name control render>` — wraps a controlled component that can't take a ref.
+- `useController(props)` — the same job as a hook, for building your own field components.
+- `useWatch({ control, name })` — subscribes to a value in a child, keeping the re-render local.
+- `watch(name?)` — the same subscription at form level, re-rendering the whole form.
+- `useFormState({ control })` — subscribes to form state without re-rendering on every value change.
+- `setValue(name, value, options?)` — writes a value programmatically; opt into validation via options.
+- `getValues(name?)` — reads current values without subscribing to them.
+- `reset(values?)` — restores the form to defaults or to a new set, clearing dirty and touched state.
+- `resetField(name)` — the same for a single field.
+- `trigger(name?)` — runs validation on demand.
+- `setError(name, error)` / `clearErrors(name?)` — set and clear errors by hand, for server-side failures.
+- `setFocus(name)` — moves focus to a field, typically the first invalid one.
+- `useFieldArray({ control, name })` — dynamic lists, with `fields`, `append`, `remove`, `move`, and `insert`.
+- `<FormProvider {...methods}>` / `useFormContext()` — share one form's methods with deeply nested fields.
+- `zodResolver(schema)` — from `@hookform/resolvers/zod`; hands validation to a Zod schema.
+
 <DifficultyTabs>
 
 <Level value="easy">
