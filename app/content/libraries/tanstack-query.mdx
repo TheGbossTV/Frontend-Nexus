@@ -109,6 +109,32 @@ Change `page` and it's a different entry, fetched and cached separately. Leave
 `page` out of the key and you get one entry serving every page — the cache
 equivalent of a missing dependency in `useEffect`.
 
+## Quick Reference
+
+Hooks and classes come from `@tanstack/react-query`; the devtools panel is a
+separate install, `@tanstack/react-query-devtools`.
+
+- `useQuery(options)` — subscribes a component to one cached query.
+- `useMutation(options)` — runs a write and exposes its pending, error, and success state.
+- `QueryClient` — the cache itself, created once and given default options.
+- `<QueryClientProvider client={…}>` — makes that client available to every hook below it.
+- `useQueryClient()` — reaches the client from a component, for invalidating or writing cache entries.
+- `queryClient.invalidateQueries({ queryKey })` — marks matching entries stale and refetches the active ones.
+- `queryClient.setQueryData(key, updater)` — writes into the cache directly, the basis of optimistic updates.
+- `queryClient.getQueryData(key)` — reads a cache entry without subscribing.
+- `queryClient.cancelQueries({ queryKey })` — cancels in-flight fetches so they can't overwrite an optimistic write.
+- `queryClient.prefetchQuery(options)` — warms the cache ahead of navigation.
+- `queryClient.ensureQueryData(options)` — returns cached data, fetching only if it isn't there.
+- `queryOptions({ queryKey, queryFn })` — defines a query once, typed, and shares it across hooks and prefetches.
+- `useInfiniteQuery(options)` — paginated queries, with `getNextPageParam` and accumulated `data.pages`.
+- `useQueries({ queries })` — runs a dynamic list of queries in parallel.
+- `useSuspenseQuery(options)` — same as `useQuery` but suspends, so `data` is never `undefined`.
+- `useIsFetching()` / `useIsMutating()` — counts of in-flight requests, for a global loading indicator.
+- `useMutationState(options)` — reads mutation state from elsewhere in the tree.
+- `placeholderData: keepPreviousData` — keeps the previous page's data visible while the next one loads.
+- `<HydrationBoundary state={…}>` — rehydrates a cache prefetched on the server.
+- `<ReactQueryDevtools />` — the cache inspector; shows each entry's key, state, and freshness.
+
 <DifficultyTabs>
 
 <Level value="easy">
