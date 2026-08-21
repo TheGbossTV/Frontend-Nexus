@@ -93,6 +93,48 @@ If you're on v7 with the future flags already enabled, there is very little left
 to do. The project has moved to a yearly major release cadence, so this pattern
 of incremental, flag-driven upgrades is the plan going forward.
 
+## Quick Reference
+
+Almost everything imports from `react-router`. The exceptions are marked: DOM
+entry points come from `react-router/dom`, and route configuration helpers from
+`@react-router/dev/routes`.
+
+- `<Link to>` — client-side navigation; renders a real `<a>`.
+- `<NavLink to>` — a `Link` that knows whether it's active, for nav menus.
+- `<Outlet />` — where a layout route renders its child route.
+- `<Navigate to>` — redirects on render, for the rare cases a loader can't handle it.
+- `useNavigate()` — navigate imperatively from an event handler.
+- `useParams()` — the dynamic segments of the matched URL.
+- `useLocation()` — the current `pathname`, `search`, `hash`, and `state`.
+- `useSearchParams()` — read and write the query string, `useState`-style.
+- `useNavigation()` — the state of an in-flight navigation, for pending UI.
+- `<Routes>` / `<Route>` — declarative mode: routes as components in the tree.
+- `createBrowserRouter(routes)` — data mode: the route config as an object, outside rendering.
+- `<RouterProvider router>` — from `react-router/dom`; renders a data router.
+- `loader` — a route module export that fetches before the route renders.
+- `clientLoader` — the same, running in the browser; set `.hydrate = true` to run on first load.
+- `action` — a route module export that handles a mutation and triggers revalidation.
+- `useLoaderData()` — the current route's loader data, though framework mode passes it as a prop instead.
+- `useActionData()` — what the last action returned, typically validation errors.
+- `<Form method="post">` — submits to the route's action without leaving the page.
+- `useFetcher()` — calls a loader or action without navigating; the tool for inline updates.
+- `useSubmit()` — submits programmatically, without a form element.
+- `redirect(url)` — returned from a loader or action to send the user elsewhere.
+- `data(value, init)` — attaches a status code or headers to what a loader returns.
+- `ErrorBoundary` — a route module export rendered when that route or its loader throws.
+- `useRouteError()` — the thrown error, inside an error boundary.
+- `isRouteErrorResponse(error)` — distinguishes a thrown HTTP response from a real crash.
+- `meta` — a route module export returning the `<title>` and meta tags for the route.
+- `links` — a route module export returning `<link>` tags, for stylesheets and preloads.
+- `shouldRevalidate` — a route module export that opts out of refetching after a mutation.
+- `HydrateFallback` — a route module export rendered while a `clientLoader` runs on first load.
+- `href("/path/:id", params)` — builds a typed URL, checked against your route config.
+- `route()` / `index()` / `layout()` / `prefix()` — from `@react-router/dev/routes`; declare routes in `routes.ts`.
+- `useMatches()` — every matched route plus its `handle`, the basis of breadcrumbs.
+- `useRevalidator()` — re-runs the current loaders on demand.
+- `useBlocker()` — intercepts a navigation, e.g. to warn about unsaved changes.
+- `<ScrollRestoration />` — restores scroll position across navigations.
+
 <DifficultyTabs>
 
 <Level value="easy">
