@@ -100,6 +100,35 @@ Two other v3 habits that no longer apply:
 If you have a large v3 config, `@config "../../tailwind.config.js"` still loads
 it, so migration can be incremental.
 
+## Quick Reference
+
+Tailwind's "API" is two things: the directives you write in CSS, and the class
+syntax you write in markup. Both are below.
+
+- `@import "tailwindcss"` — pulls in the framework; replaces v3's three `@tailwind` directives.
+- `@theme { … }` — declares design tokens, each becoming both a custom property and a set of utilities.
+- `@custom-variant name (…)` — defines your own variant, including class-based dark mode.
+- `@utility name { … }` — defines a custom utility that variants like `hover:` can modify.
+- `@apply …` — inlines utility classes into a regular CSS rule.
+- `@source "…"` — points the scanner at files it won't find on its own, such as a package in `node_modules`.
+- `@variant dark { … }` — applies an existing variant to a block of CSS.
+- `@reference "…"` — makes your theme available to a component file without emitting duplicate CSS.
+- `@layer base { … }` — adds plain CSS to a cascade layer, typically for element-level defaults.
+- `--spacing(n)` — the spacing scale as a function, for use in arbitrary CSS.
+- `--alpha(color / 50%)` — adjusts a colour's opacity in CSS.
+- `@config "…"` / `@plugin "…"` — v3 compatibility: load a legacy JS config or plugin.
+- `hover:` / `focus:` / `active:` / `disabled:` — state variants, the ones you'll type most.
+- `sm:` / `md:` / `lg:` / `xl:` — min-width breakpoints; unprefixed means all sizes.
+- `dark:` — applies in dark mode, however you've defined it.
+- `group-hover:` — styles a child when a marked ancestor (`class="group"`) is hovered.
+- `peer-checked:` — styles a sibling based on the state of a marked one (`class="peer"`).
+- `has-[…]:` — styles a parent based on what it contains, via the CSS `:has()` selector.
+- `not-[…]:` — negates a variant.
+- `@container` and `@md:` — container queries: size against the nearest marked parent, not the viewport.
+- `bg-[#316ff6]` / `w-[347px]` — arbitrary values, for the one-off that isn't on the scale.
+- `bg-brand/50` — the opacity modifier, applied to any colour utility.
+- `!` suffix, as in `bg-red-500!` — forces `!important`; the v4 spelling, moved from prefix to suffix.
+
 <DifficultyTabs>
 
 <Level value="easy">
