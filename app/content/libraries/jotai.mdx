@@ -90,6 +90,32 @@ Two utilities you'll still see in older tutorials are on the way out in v2:
 - **`atomFamily`** is deprecated in `jotai/utils` and will be removed in v3;
   it moved to the separate `jotai-family` package.
 
+## Quick Reference
+
+Core APIs come from `jotai`; everything below the divide lives in `jotai/utils`.
+
+- `atom(initialValue)` — declares a primitive atom; the config object, not the value.
+- `atom((get) => …)` — a read-only derived atom, with dependencies tracked automatically.
+- `atom(null, (get, set, arg) => …)` — a write-only atom, used for actions.
+- `useAtom(anAtom)` — reads and writes an atom, returning a `useState`-shaped pair.
+- `useAtomValue(anAtom)` — reads an atom without subscribing to the setter.
+- `useSetAtom(anAtom)` — returns just the setter, so the component doesn't re-render on change.
+- `<Provider>` — scopes a store to a subtree, so the same atom holds different values per Provider.
+- `createStore()` — builds a store you can pass to `Provider` or drive from outside React.
+- `getDefaultStore()` — returns the implicit store used when there's no `Provider`.
+- `useStore()` — reads the nearest store from a component.
+- `store.get(anAtom)` / `store.set(anAtom, value)` — read and write outside React.
+- `store.sub(anAtom, listener)` — subscribes to one atom; returns an unsubscribe function.
+- `atomWithStorage(key, initial)` — persists an atom to `localStorage`, `sessionStorage`, or `AsyncStorage`.
+- `atomWithReset(initialValue)` — a primitive atom that also accepts the `RESET` symbol.
+- `useResetAtom(anAtom)` — resets a resettable atom to its initial value.
+- `RESET` — the sentinel value that triggers that reset on write.
+- `atomWithDefault((get) => …)` — a resettable atom whose default is computed rather than static.
+- `selectAtom(anAtom, selector, equalityFn?)` — derives a narrower atom that only updates when the selection changes.
+- `splitAtom(listAtom)` — turns an atom holding a list into an atom holding one atom per item.
+- `unwrap(asyncAtom, fallback?)` — converts an async atom to a sync one with a configurable fallback.
+- `useAtomCallback(callback)` — builds an event handler that can `get` and `set` atoms without subscribing.
+
 <DifficultyTabs>
 
 <Level value="easy">
