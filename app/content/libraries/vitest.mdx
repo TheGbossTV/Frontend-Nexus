@@ -79,6 +79,44 @@ If you're following a v3-era tutorial, these will bite:
 - **Several coverage options were removed**, including `coverage.all` and
   `coverage.ignoreEmptyLines`. Specify `coverage.include` explicitly instead.
 
+## Quick Reference
+
+Imported from `vitest`, unless you've enabled `globals: true`, in which case the
+test functions and `expect` are available without importing.
+
+- `describe(name, fn)` — groups related tests.
+- `it(name, fn)` / `test(name, fn)` — declares one test; the two are aliases.
+- `it.each(cases)(name, fn)` — runs the same test across a table of inputs.
+- `it.skip` / `it.only` / `it.todo` — skip, isolate, or mark a test as planned.
+- `expect(value)` — starts an assertion.
+- `expect(value).toBe(other)` — reference or primitive equality, via `Object.is`.
+- `expect(value).toEqual(other)` — deep structural equality, ignoring `undefined` properties.
+- `expect(value).toStrictEqual(other)` — deep equality that also checks types and `undefined` keys.
+- `expect(fn).toThrow(match?)` — asserts a call throws; pass a function, not a call.
+- `expect(promise).resolves` / `.rejects` — asserts on an awaited result.
+- `expect(mock).toHaveBeenCalledWith(…)` — asserts a mock's arguments.
+- `expect(value).toMatchInlineSnapshot()` — writes the snapshot into the test file itself.
+- `beforeEach(fn)` / `afterEach(fn)` — per-test setup and teardown.
+- `beforeAll(fn)` / `afterAll(fn)` — once per file.
+- `vi.fn(impl?)` — a mock function that records its calls.
+- `vi.spyOn(object, method)` — wraps an existing method, keeping the original available.
+- `vi.mock(path, factory?)` — replaces a whole module; hoisted above the imports.
+- `vi.hoisted(fn)` — runs code before those hoisted mocks, so a factory can reference it.
+- `vi.mocked(value)` — a types-only helper that tells TypeScript something is a mock.
+- `vi.importActual(path)` — the unmocked module, for partially mocking one export.
+- `vi.useFakeTimers()` / `vi.useRealTimers()` — take over and hand back the clock.
+- `vi.advanceTimersByTime(ms)` — moves fake time forward.
+- `vi.setSystemTime(date)` — pins `Date.now()` for date-dependent assertions.
+- `vi.stubEnv(key, value)` / `vi.stubGlobal(key, value)` — replace an env variable or global for one test.
+- `vi.clearAllMocks()` — clears recorded calls, keeping implementations.
+- `vi.resetAllMocks()` — clears calls *and* implementations.
+- `vi.restoreAllMocks()` — restores originals; in v4, only for `vi.spyOn` spies.
+- `vi.waitFor(fn)` — retries a callback until it stops throwing.
+- `test.environment` — config; `'node'` by default, `'jsdom'` or `'happy-dom'` for DOM tests.
+- `test.globals` — config; exposes `describe`/`it`/`expect` without imports, Jest-style.
+- `test.setupFiles` — config; files run before each test file, where matchers are registered.
+- `test.projects` — config; several test setups in one run, replacing v3's `workspace`.
+
 <DifficultyTabs>
 
 <Level value="easy">
