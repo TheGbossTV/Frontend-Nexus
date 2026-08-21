@@ -93,6 +93,34 @@ already running Redux it usually removes the need for a second server-state
 library. It generates hooks, de-dupes identical requests across components, and
 handles cache lifetimes for you.
 
+## Quick Reference
+
+Everything below is exported from `@reduxjs/toolkit`, except the two hooks marked
+`react-redux` and the RTK Query entry points, which come from
+`@reduxjs/toolkit/query/react`.
+
+- `configureStore(options)` — creates the store with thunk, dev-time checks, and DevTools already wired.
+- `createSlice(options)` — generates action types, action creators, and a reducer from one object.
+- `slice.reducer` — the generated reducer, handed to `configureStore`'s `reducer` map.
+- `slice.actions` — the generated action creators, one per key in `reducers`.
+- `slice.selectors` — selectors declared on the slice, pre-scoped to its slot in the store.
+- `useSelector(selector)` — from `react-redux`; subscribes a component to a slice of state.
+- `useDispatch()` — from `react-redux`; returns the store's `dispatch`.
+- `createAsyncThunk(type, payloadCreator)` — wraps an async call, dispatching `pending`/`fulfilled`/`rejected` for you.
+- `createSelector(inputs, resultFn)` — memoises derived state so it isn't recomputed on every render.
+- `createEntityAdapter(options)` — normalised CRUD helpers plus `getSelectors` for a collection.
+- `createAction(type)` — a standalone action creator, for actions no single slice owns.
+- `createReducer(initialState, builder)` — a reducer without a slice, using the same Immer drafts.
+- `combineSlices(...slices)` — combines slices into one reducer, with lazy `injectInto` for code splitting.
+- `createListenerMiddleware()` — runs side effects in response to actions, without a thunk.
+- `getDefaultMiddleware()` — the default middleware array, for adding to rather than replacing.
+- `isAnyOf(...matchers)` / `isAllOf(...)` — action matchers for `extraReducers` and listeners.
+- `current(draft)` — a plain snapshot of an Immer draft, for logging mid-reducer.
+- `nanoid()` — the id generator RTK uses internally, exported for your own ids.
+- `createApi(options)` — defines an RTK Query API slice and generates a hook per endpoint.
+- `fetchBaseQuery(options)` — a small `fetch` wrapper used as an API's `baseQuery`.
+- `setupListeners(dispatch)` — enables refetch-on-focus and refetch-on-reconnect.
+
 <DifficultyTabs>
 
 <Level value="easy">
