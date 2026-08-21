@@ -97,6 +97,32 @@ const text = await response.text() // TypeError: body already read
 If you need it twice — logging a failed response before throwing, say — call
 `response.clone()` first, or read it once as text and parse it yourself.
 
+## Quick Reference
+
+All globals — nothing to import, in browsers or in Node 18+.
+
+- `fetch(input, init?)` — makes the request; `input` is a URL string or a `Request`.
+- `response.ok` — `true` only for status 200–299, and the check fetch will never do for you.
+- `response.status` / `response.statusText` — the numeric code and its message.
+- `response.json()` — parses the body as JSON; consumes the stream.
+- `response.text()` — reads the body as a string.
+- `response.blob()` — reads the body as a `Blob`, for files and images.
+- `response.arrayBuffer()` — reads the body as raw bytes.
+- `response.formData()` — reads a multipart or urlencoded body back as `FormData`.
+- `response.clone()` — copies the response so the body can be read a second time.
+- `response.headers.get(name)` — reads one response header, case-insensitively.
+- `response.body` — the raw `ReadableStream`, for consuming a response progressively.
+- `Headers` — builds request headers; also `set`, `append`, `has`, and iteration.
+- `Request(url, init)` — a reusable request object, handy for interceptor-style wrappers.
+- `Response(body, init)` — constructs a response by hand, for tests and service workers.
+- `Response.json(data, init?)` — static shortcut that builds a JSON response.
+- `AbortController` — created per request; its `abort()` cancels the fetch.
+- `controller.signal` — passed as `init.signal` to make the request cancellable.
+- `AbortSignal.timeout(ms)` — a signal that aborts itself, replacing hand-rolled timeout races.
+- `AbortSignal.any([…])` — aborts as soon as any of several signals does, e.g. timeout *or* unmount.
+- `FormData` — multipart bodies; pass it directly and let the browser set the boundary header.
+- `URLSearchParams` — builds urlencoded bodies and query strings with correct escaping.
+
 <DifficultyTabs>
 
 <Level value="easy">
