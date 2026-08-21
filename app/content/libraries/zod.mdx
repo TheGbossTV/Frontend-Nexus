@@ -106,6 +106,42 @@ functional API that ships dramatically less code, at the cost of the fluent
 method chaining most people like. Use the standard import unless you've measured
 a problem.
 
+## Quick Reference
+
+All v4 spellings, from `zod`.
+
+- `z.object(shape)` — the workhorse; unknown keys are stripped by default.
+- `z.string()` / `z.number()` / `z.boolean()` — the primitives, with `.min`, `.max`, and friends.
+- `z.email()` / `z.url()` / `z.uuid()` — top-level string formats, replacing `z.string().email()`.
+- `z.array(schema)` — a list, with `.min`, `.max`, and `.length`.
+- `z.enum([…])` — a fixed set of string values; in v4 it also covers TypeScript enums.
+- `z.literal(value)` — exactly one value, the basis of discriminated unions.
+- `z.union([…])` / `z.discriminatedUnion(key, […])` — alternatives; the discriminated form gives far better errors.
+- `z.record(keySchema, valueSchema)` — a dictionary; v4 requires both arguments.
+- `z.tuple([…])` — a fixed-length array with a type per position.
+- `z.lazy(() => schema)` — defers evaluation, for recursive schemas.
+- `z.coerce.number()` — converts before validating, for query params and form inputs.
+- `schema.parse(data)` — validates and returns typed data, throwing a `ZodError` on failure.
+- `schema.safeParse(data)` — returns `{ success, data | error }` instead of throwing.
+- `schema.parseAsync(data)` — required when any refinement or transform is async.
+- `z.infer<typeof schema>` — extracts the static output type.
+- `z.input<typeof schema>` / `z.output<…>` — the types either side of a transform.
+- `.optional()` / `.nullable()` / `.nullish()` — allow `undefined`, `null`, or both.
+- `.default(value)` — fills in a missing value; must match the *output* type in v4.
+- `.prefault(value)` — the v3 behaviour: a default applied before parsing.
+- `.catch(value)` — falls back to a value instead of failing.
+- `.refine(check, error?)` — a custom rule that passes or fails.
+- `.superRefine(fn)` — custom rules that can report several issues at once.
+- `.transform(fn)` — reshapes the parsed value, changing the inferred output type.
+- `.pipe(schema)` — feeds one schema's output into another.
+- `.extend(shape)` — adds keys to an object schema; the replacement for the deprecated `.merge()`.
+- `.pick({…})` / `.omit({…})` / `.partial()` — derive a narrower object schema.
+- `z.strictObject(shape)` / `z.looseObject(shape)` — reject or keep unknown keys, replacing `.strict()` / `.passthrough()`.
+- `error.issues` — the array of validation problems.
+- `z.prettifyError(error)` — a readable multi-line summary, ideal for CLIs and logs.
+- `z.treeifyError(error)` — a nested object mirroring your schema's shape.
+- `z.flattenError(error)` — form-shaped `formErrors` / `fieldErrors`, one level deep.
+
 <DifficultyTabs>
 
 <Level value="easy">
