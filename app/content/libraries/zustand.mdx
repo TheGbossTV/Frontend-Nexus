@@ -71,6 +71,29 @@ every change.
 Note that `set` **merges** at the top level rather than replacing, so returning a
 partial object is normal and you don't need to spread the rest of the state.
 
+## Quick Reference
+
+Core APIs come from `zustand`; middleware from `zustand/middleware`, except `immer`, which
+lives at `zustand/middleware/immer`.
+
+- `create(initializer)` — builds a store and returns it as a React hook.
+- `set(partial, replace?)` — merges a partial update into state; pass `true` to replace it.
+- `get()` — reads the current state from inside an action, without subscribing.
+- `useStore(store, selector)` — subscribes a component to a vanilla store.
+- `createStore(initializer)` — builds a store with no React binding, for use outside components.
+- `store.getState()` — reads state from anywhere: event handlers, plain functions, other libraries.
+- `store.setState(partial)` — writes state from outside React.
+- `store.subscribe(listener)` — runs a callback on every change; returns an unsubscribe function.
+- `store.getInitialState()` — returns the state the store was created with.
+- `useShallow(selector)` — wraps a selector so a new object of unchanged values doesn't re-render.
+- `shallow(a, b)` — the shallow equality comparison itself, for use outside a hook.
+- `persist(initializer, options)` — saves state to `localStorage` or a custom storage engine and rehydrates it.
+- `devtools(initializer)` — connects the store to Redux DevTools for time-travel debugging.
+- `immer(initializer)` — lets `set` take a mutation-style draft instead of a new object.
+- `combine(initialState, actions)` — infers store types from an initial state plus an actions object.
+- `subscribeWithSelector(initializer)` — upgrades `subscribe` to accept a selector and an equality function.
+- `createWithEqualityFn(initializer, equalityFn)` — from `zustand/traditional`, for a store-wide custom equality check.
+
 <DifficultyTabs>
 
 <Level value="easy">

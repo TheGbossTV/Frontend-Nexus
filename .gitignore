@@ -6,4 +6,3 @@ build/
 .env
 .env.*
 !.env.example
-CLAUDE.md
