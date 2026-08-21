@@ -100,6 +100,28 @@ The durable technical constraint is the Server Components one. It isn't a
 maintenance question and won't be fixed by more contributors: a runtime that
 injects styles during render has nowhere to run when there is no client runtime.
 
+## Quick Reference
+
+All v6 spellings, from `styled-components`.
+
+- ``styled.button`…` `` — styles an HTML element and returns a component.
+- ``styled(Component)`…` `` — styles an existing component; it must accept a `className`.
+- ``css`…` `` — a reusable block of styles, and what you need when interpolating a function.
+- `createGlobalStyle` — a component that injects global styles; resets, `body` rules, custom properties.
+- `keyframes` — defines an animation, interpolated into an `animation` declaration.
+- `<ThemeProvider theme>` — puts a theme object into context for every styled component below.
+- `useTheme()` — reads that theme in a function component.
+- `withTheme(Component)` — the same for class components.
+- `<ThemeConsumer>` — the render-prop form; rarely the right choice now.
+- `$prop` — a transient prop: used for styling, never forwarded to the DOM.
+- `.attrs({ … })` — attaches default or computed props, such as `type="button"`.
+- `.withConfig({ … })` — sets `shouldForwardProp` or a stable `displayName`.
+- `shouldForwardProp` — decides which props reach the DOM, for anything not using `$`.
+- `as="a"` — renders a different element while keeping the styles.
+- `<StyleSheetManager>` — scopes style injection: plugins, a CSP nonce, or rendering into an iframe.
+- `ServerStyleSheet` — collects styles during server rendering so they ship in the HTML.
+- `isStyledComponent(target)` — checks whether something is already a styled component.
+
 <DifficultyTabs>
 
 <Level value="easy">
